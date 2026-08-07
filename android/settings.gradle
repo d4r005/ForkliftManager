@@ -1,2 +1,2 @@
-rootProject.name = "MontaControl"
+rootProject.name = "ForkliftManager"
 include ':app'

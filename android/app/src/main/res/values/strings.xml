@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MontaControl</string>
+    <string name="app_name">ForkliftManager</string>
     <string name="app_subtitle">Checklist de Montacargas</string>
     <string name="loading">Cargando...</string>
 </resources>

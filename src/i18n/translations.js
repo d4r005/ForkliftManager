@@ -2,7 +2,7 @@
 
 export const translations = {
   es: {
-    appTitle: 'MontaControl',
+    appTitle: 'ForkliftManager',
     appSubtitle: 'Bitácora de Revisión de Montacargas',
     normRef: 'NOM-006-STPS-2014 Numeral 7.8.5',
     company: 'SHELSER S. DE R.L. DE C.V.',
@@ -193,7 +193,7 @@ authEmployeeNumber: 'Número de empleado',
     expPdfAutoFill: 'Los datos se extraen automáticamente del PDF',
   },
   en: {
-    appTitle: 'MontaControl',
+    appTitle: 'ForkliftManager',
     appSubtitle: 'Forklift Inspection Log',
     normRef: 'NOM-006-STPS-2014 Section 7.8.5',
     company: 'SHELSER S. DE R.L. DE C.V.',
@@ -384,7 +384,7 @@ authEmployeeNumber: 'Employee number',
     expPdfAutoFill: 'Data is automatically extracted from the PDF',
   },
   zh: {
-    appTitle: 'MontaControl',
+    appTitle: 'ForkliftManager',
     appSubtitle: '叉车检查记录表',
     normRef: 'NOM-006-STPS-2014 第7.8.5条',
     company: 'SHELSER S. DE R.L. DE C.V.',
@@ -575,7 +575,7 @@ authEmployeeNumber: '员工编号',
     expPdfAutoFill: '数据从PDF自动提取',
   },
   vi: {
-    appTitle: 'MontaControl',
+    appTitle: 'ForkliftManager',
     appSubtitle: 'Nhật ký kiểm tra xe nâng',
     normRef: 'NOM-006-STPS-2014 Mục 7.8.5',
     company: 'SHELSER S. DE R.L. DE C.V.',

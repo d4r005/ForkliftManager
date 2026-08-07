@@ -131,7 +131,7 @@ function AppContent() {
 
       <footer className="app-footer">
         <p>{t('company')} — {t('normRef')}</p>
-        <p className="footer-sub">MontaControl v2.0 — ES · EN · 中文 · Tiếng Việt</p>
+        <p className="footer-sub">ForkliftManager v2.0 — ES · EN · 中文 · Tiếng Việt</p>
       </footer>
     </div>
   );

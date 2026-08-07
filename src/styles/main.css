@@ -1,4 +1,4 @@
-/* ===== MontaControl — Global Styles ===== */
+/* ===== ForkliftManager — Global Styles ===== */
 
 :root {
   --primary: #1a73e8;
@@ -2186,4 +2186,167 @@ body {
   background: rgba(255, 193, 7, 0.1);
   border: 1px solid rgba(255, 193, 7, 0.3);
   color: #ffc107;
+}
+
+/* ===== USER PANEL (header dropdown with language + sign out) ===== */
+.user-panel-wrap {
+  position: relative;
+}
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.1);
+  border: none;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.user-menu:hover {
+  background: rgba(255,255,255,0.18);
+}
+
+.user-panel-chevron {
+  font-size: 9px;
+  color: var(--text-secondary, #9aa0a6);
+  margin-left: 2px;
+}
+
+.user-panel-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  min-width: 220px;
+  z-index: 500;
+  padding: 12px;
+  animation: userPanelFadeIn 0.15s ease;
+}
+
+@keyframes userPanelFadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.user-panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.user-panel-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-secondary, #5f6368);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.user-panel-langs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.user-panel-langs .lang-btn {
+  border: 1px solid var(--border, #e0e0e0);
+  background: var(--gray-light, #f8f9fa);
+}
+
+.user-panel-langs .lang-btn.active {
+  border-color: var(--primary, #1a73e8);
+  background: #e8f0fe;
+  color: var(--primary, #1a73e8);
+}
+
+.user-panel-divider {
+  height: 1px;
+  background: var(--border, #e0e0e0);
+  margin: 12px 0;
+}
+
+.user-panel-signout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.user-panel-signout:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+/* ===== LOGIN PAGE — language panel trigger ===== */
+.login-lang-panel-wrap {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.login-lang-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #f8f9fa;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+}
+
+.login-lang-trigger:hover {
+  background: #eef1f5;
+}
+
+.login-lang-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  min-width: 190px;
+  z-index: 500;
+  padding: 12px;
+  animation: userPanelFadeIn 0.15s ease;
+}
+
+.login-lang-dropdown .user-panel-langs {
+  flex-direction: column;
+}
+
+.login-lang-dropdown .lang-btn {
+  justify-content: flex-start;
+  width: 100%;
+  border: 1px solid #e0e0e0;
+  background: #f8f9fa;
+}
+
+.login-lang-dropdown .lang-btn.active {
+  border-color: #1a73e8;
+  background: #e8f0fe;
+  color: #1a73e8;
+}
+
+.login-card {
+  position: relative;
 }

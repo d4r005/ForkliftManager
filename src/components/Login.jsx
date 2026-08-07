@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../i18n/LanguageContext.jsx';
 import { languages } from '../data/checklistItems.js';
@@ -10,8 +10,21 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showLangPanel, setShowLangPanel] = useState(false);
+  const langPanelRef = useRef(null);
 
   useEffect(() => { setError(null); setLocalError(''); }, []);
+
+  useEffect(() => {
+    if (!showLangPanel) return;
+    const handleClickOutside = (e) => {
+      if (langPanelRef.current && !langPanelRef.current.contains(e.target)) {
+        setShowLangPanel(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showLangPanel]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,29 +47,50 @@ export default function Login() {
     setLoading(false);
   };
 
+  const currentLang = languages.find(l => l.code === lang);
+
   return (
     <div className="login-page">
       <div className="login-card">
-        {/* Brand */}
-        <div className="login-brand">
-          <div className="brand-logo login-logo">M</div>
-          <h1>MontaControl</h1>
-          <p>{t('appSubtitle')}</p>
-          <p className="login-norm">{t('normRef')}</p>
+        {/* Language panel toggle */}
+        <div className="login-lang-panel-wrap" ref={langPanelRef}>
+          <button
+            type="button"
+            className="login-lang-trigger"
+            onClick={() => setShowLangPanel(v => !v)}
+            title={t('language')}
+          >
+            <span className="lang-flag">{currentLang?.flag}</span>
+            <span className="lang-code">{currentLang?.code.toUpperCase()}</span>
+            <span className="user-panel-chevron">{showLangPanel ? '▲' : '▼'}</span>
+          </button>
+
+          {showLangPanel && (
+            <div className="login-lang-dropdown">
+              <div className="user-panel-label">🌐 {t('language')}</div>
+              <div className="user-panel-langs">
+                {languages.map(l => (
+                  <button
+                    key={l.code}
+                    type="button"
+                    className={`lang-btn ${lang === l.code ? 'active' : ''}`}
+                    onClick={() => { setLang(l.code); setShowLangPanel(false); }}
+                  >
+                    <span className="lang-flag">{l.flag}</span>
+                    <span className="lang-code">{l.code.toUpperCase()}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Language selector */}
-        <div className="login-lang">
-          {languages.map(l => (
-            <button
-              key={l.code}
-              className={`lang-btn ${lang === l.code ? 'active' : ''}`}
-              onClick={() => setLang(l.code)}
-            >
-              <span className="lang-flag">{l.flag}</span>
-              <span className="lang-code">{l.code.toUpperCase()}</span>
-            </button>
-          ))}
+        {/* Brand */}
+        <div className="login-brand">
+          <div className="brand-logo login-logo">FM</div>
+          <h1>ForkliftManager</h1>
+          <p>{t('appSubtitle')}</p>
+          <p className="login-norm">{t('normRef')}</p>
         </div>
 
         {/* Form */}
@@ -98,7 +132,7 @@ export default function Login() {
 
         <div className="login-footer">
           <p>{t('company')}</p>
-          <p className="footer-sub">MontaControl v2.0 — ES · EN · 中文 · Tiếng Việt</p>
+          <p className="footer-sub">ForkliftManager v2.0 — ES · EN · 中文 · Tiếng Việt</p>
         </div>
       </div>
     </div>

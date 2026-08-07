@@ -1,11 +1,11 @@
-# MontaControl Android
+# ForkliftManager Android
 
 App nativa de Android para el sistema de checklist de montacargas (NOM-006-STPS-2014).
 
 ## Estructura del proyecto
 
 ```
-MontaControl/
+ForkliftManager/
 ├── src/                    # Código web (React + Vite) — compartido
 ├── android/                # Proyecto nativo Android
 │   ├── app/

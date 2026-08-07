@@ -1,4 +1,4 @@
-# ProGuard rules for MontaControl Android
+# ProGuard rules for ForkliftManager Android
 
 # Keep WebView and JavaScript interface
 -keepclassmembers class * {

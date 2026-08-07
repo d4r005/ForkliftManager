@@ -1,6 +1,6 @@
 {
   "appId": "com.shelser.montacontrol",
-  "appName": "MontaControl",
+  "appName": "ForkliftManager",
   "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {
