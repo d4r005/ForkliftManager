@@ -1,43 +1,54 @@
-# Plan de Implementación: Navegación Adaptativa (Web y Android)
+# Plan de Implementación: Corrección de Importación de Excel y Ampliación de Datos de Empleado
 
-Este plan detalla los cambios necesarios para implementar un panel lateral de navegación para la versión web y una barra de navegación inferior para la versión Android, mejorando la experiencia de usuario según la plataforma.
+Este plan aborda el error "No se encontraron datos válidos" al importar empleados desde Excel y amplía el sistema para soportar los campos adicionales (NSS y Puesto) que se encuentran en el archivo del usuario.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> Se utilizará la API de Capacitor para detectar si la aplicación se ejecuta en la web o de forma nativa (Android).
-> La navegación inferior en Android tiene un límite de espacio. Se evaluará si todos los elementos caben o si es necesario un menú "Más".
+> El error actual se debe a que el sistema busca la columna "Número de empleado" o "Employee", pero el Excel del usuario utiliza "Empleado". Se añadirán alias para reconocer "Empleado", "NSS" y "Puesto".
+
+> [!NOTE]
+> Se agregarán las columnas `nss` y `job_title` a la tabla `app_users` en Supabase para almacenar la información completa.
 
 ## Proposed Changes
 
-### Componentes de Navegación
+### Base de Datos (Supabase)
 
-#### [NEW] [Navigation.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/Navigation.jsx)
-Crear un nuevo componente que maneje ambos tipos de navegación:
-- `SideNav`: Para la versión web. Estará fijo a la izquierda.
-- `BottomNav`: Para la versión Android. Estará fijo en la parte inferior.
-- Detectará la plataforma usando `Capacitor.getPlatform()`.
+#### [NEW] [add_nss_job_title_migration.sql](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/supabase/add_nss_job_title_migration.sql)
+- Crear una migración para añadir `nss` (TEXT) y `job_title` (TEXT) a la tabla `app_users`.
 
-#### [MODIFY] [Header.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/Header.jsx)
-- Eliminar la sección `<nav className="header-nav">`.
-- Mantener la parte superior (Logo y Panel de Usuario), pero ajustarla para que sea un "Top Bar" más ligero.
+#### [MODIFY] [bulk_import_employees (RPC)](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/supabase/bulk_import_migration.sql)
+- Actualizar la función para procesar los nuevos campos `nss` y `job_title` desde el JSON de entrada.
 
-#### [MODIFY] [App.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/App.jsx)
-- Integrar el nuevo componente `Navigation`.
-- Ajustar el diseño (layout) principal para que el contenido se desplace correctamente según el tipo de navegación activo.
+#### [MODIFY] [list_expedientes (RPC)](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/supabase/expedientes_migration.sql)
+- Incluir `nss` y `job_title` en el objeto JSON retornado.
 
-### Estilos
+#### [MODIFY] [get_expediente (RPC)](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/supabase/expedientes_migration.sql)
+- Incluir los nuevos campos en la consulta.
 
-#### [MODIFY] [main.css](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/styles/main.css)
-- Añadir estilos para `.side-nav` (ancho fijo, altura completa, flex-column).
-- Añadir estilos para `.bottom-nav` (fijo abajo, ancho completo, flex-row).
-- Ajustar `.app-main` para tener margen izquierdo en web y margen inferior en Android.
-- Esconder el `footer` o reposicionarlo según sea conveniente.
+#### [MODIFY] [update_expediente (RPC)](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/supabase/expedientes_migration.sql)
+- Añadir parámetros opcionales para `nss` y `job_title`.
+
+### Frontend
+
+#### [MODIFY] [ExcelImport.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/ExcelImport.jsx)
+- Actualizar la lógica de normalización para incluir alias como "Empleado", "NSS", "Puesto", "Cargo".
+- Modificar `downloadTemplate` para incluir estas columnas en la plantilla generada.
+- Actualizar el envío de datos al RPC para incluir `nss` y `job_title`.
+
+#### [MODIFY] [EmployeeRecords.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/EmployeeRecords.jsx)
+- Actualizar el estado `editData` y el formulario de edición para incluir NSS y Puesto.
+- Actualizar la vista de detalles para mostrar estos campos.
+- Actualizar la llamada al RPC `update_expediente`.
+
+#### [MODIFY] [translations.js](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/i18n/translations.js)
+- Añadir etiquetas para "NSS" y "Puesto" (Job Title) en todos los idiomas.
 
 ## Verification Plan
 
 ### Manual Verification
-- Probar en el navegador (versión web) para verificar el panel lateral.
-- Simular un dispositivo móvil en las herramientas de desarrollo de Chrome (o usar el emulador de Android si está disponible) para verificar la navegación inferior.
-- Asegurarse de que el cambio de vista (Dashboard, List, etc.) funcione correctamente desde ambos menús.
-- Verificar que el contador de "Revisiones guardadas" (badge) se muestre correctamente.
+1. Ejecutar la migración SQL en Supabase.
+2. Intentar cargar el archivo Excel del usuario.
+3. Verificar que la vista previa muestre correctamente los datos de "Empleado", "Nombre", "RFC", "CURP", "NSS" y "Puesto".
+4. Confirmar la importación y verificar en la lista de expedientes que los nuevos campos se visualicen correctamente.
+5. Editar un expediente manualmente y verificar que NSS y Puesto se guarden correctamente.

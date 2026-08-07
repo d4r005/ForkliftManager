@@ -20,6 +20,8 @@ export default function ExcelImport({ onDone, onClose }) {
         'Nombre': 'Juan Perez Gonzalez',
         'CURP': 'PEGJ900101HDFABC01',
         'RFC': 'PEGJ900101AB1',
+        'NSS': '12345678901',
+        'Puesto': 'Montacarguista',
         'Vigencia DC3 (AAAA-MM-DD)': '2026-12-31',
         'Vigencia Diploma (AAAA-MM-DD)': '2026-12-31',
         'Contraseña': 'Empleado123',
@@ -39,7 +41,8 @@ export default function ExcelImport({ onDone, onClose }) {
     const ws = XLSX.utils.json_to_sheet(data);
     ws['!cols'] = [
       { wch: 18 }, { wch: 28 }, { wch: 22 }, { wch: 18 },
-      { wch: 28 }, { wch: 28 }, { wch: 16 }, { wch: 18 },
+      { wch: 18 }, { wch: 20 }, { wch: 28 }, { wch: 28 },
+      { wch: 16 }, { wch: 18 },
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Empleados');
@@ -75,10 +78,12 @@ export default function ExcelImport({ onDone, onClose }) {
 
           return {
             row: i + 2, // +2 porque row 1 es header
-            employee_number: get('numero') || get('employee'),
+            employee_number: get('numero') || get('employee') || get('empleado'),
             name: get('nombre') || get('name'),
             curp: get('curp').toUpperCase(),
             rfc: get('rfc').toUpperCase(),
+            nss: get('nss'),
+            job_title: get('puesto') || get('cargo') || get('job') || get('title'),
             dc3_vigencia: get('dc3'),
             diploma_vigencia: get('diploma'),
             password: get('contrase') || get('password'),
@@ -110,6 +115,8 @@ export default function ExcelImport({ onDone, onClose }) {
         name: r.name,
         curp: r.curp || null,
         rfc: r.rfc || null,
+        nss: r.nss || null,
+        job_title: r.job_title || null,
         dc3_vigencia: r.dc3_vigencia || null,
         diploma_vigencia: r.diploma_vigencia || null,
         password: r.password || 'temporal123',

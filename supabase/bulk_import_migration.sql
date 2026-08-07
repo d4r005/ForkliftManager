@@ -64,6 +64,8 @@ BEGIN
       UPDATE app_users SET
         curp = NULLIF(v_emp->>'curp', ''),
         rfc = NULLIF(v_emp->>'rfc', ''),
+        nss = NULLIF(v_emp->>'nss', ''),
+        job_title = NULLIF(v_emp->>'job_title', ''),
         dc3_vigencia = NULLIF(v_emp->>'dc3_vigencia', '')::DATE,
         diploma_vigencia = NULLIF(v_emp->>'diploma_vigencia', '')::DATE,
         updated_at = NOW()

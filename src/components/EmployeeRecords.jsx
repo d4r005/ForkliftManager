@@ -21,7 +21,7 @@ export default function EmployeeRecords() {
   const [extracting, setExtracting] = useState(false);
 
   const [editData, setEditData] = useState({
-    employeeNumber: '', name: '', curp: '', rfc: '',
+    employeeNumber: '', name: '', curp: '', rfc: '', nss: '', jobTitle: '',
     dc3Vigencia: '', diplomaVigencia: '',
     photoPath: null, dc3PdfPath: null, diplomaPdfPath: null,
   });
@@ -55,6 +55,8 @@ export default function EmployeeRecords() {
       name: emp.name || '',
       curp: emp.curp || '',
       rfc: emp.rfc || '',
+      nss: emp.nss || '',
+      jobTitle: emp.jobTitle || '',
       dc3Vigencia: emp.dc3Vigencia || '',
       diplomaVigencia: emp.diplomaVigencia || '',
       photoPath: emp.photoPath || null,
@@ -159,6 +161,8 @@ export default function EmployeeRecords() {
         p_employee_number: editData.employeeNumber,
         p_curp: editData.curp || null,
         p_rfc: editData.rfc || null,
+        p_nss: editData.nss || null,
+        p_job_title: editData.jobTitle || null,
         p_dc3_vigencia: editData.dc3Vigencia || null,
         p_diploma_vigencia: editData.diplomaVigencia || null,
         p_photo_path: editData.photoPath || null,
@@ -347,6 +351,18 @@ export default function EmployeeRecords() {
                     placeholder="AAAA000000AAA" />
                 </div>
                 <div className="form-field">
+                  <label>NSS</label>
+                  <input type="text" value={editData.nss} maxLength={11}
+                    onChange={e => setEditData(prev => ({ ...prev, nss: e.target.value }))}
+                    placeholder="12345678901" />
+                </div>
+                <div className="form-field">
+                  <label>{t('expJobTitle')}</label>
+                  <input type="text" value={editData.jobTitle}
+                    onChange={e => setEditData(prev => ({ ...prev, jobTitle: e.target.value }))}
+                    placeholder="Montacarguista" />
+                </div>
+                <div className="form-field">
                   <label>{t('expDc3Vigencia')}</label>
                   <input type="date" value={editData.dc3Vigencia}
                     onChange={e => setEditData(prev => ({ ...prev, dc3Vigencia: e.target.value }))} />
@@ -424,6 +440,8 @@ export default function EmployeeRecords() {
             <div className="expediente-view-data">
               <ExpDataRow label={t('expName')} value={selectedEmp.name || '—'} />
               <ExpDataRow label={t('expEmployeeNumber')} value={selectedEmp.employeeNumber} />
+              <ExpDataRow label={t('expJobTitle')} value={selectedEmp.jobTitle || '—'} />
+              <ExpDataRow label="NSS" value={selectedEmp.nss || '—'} />
               <ExpDataRow label={t('expCurp')} value={selectedEmp.curp || '—'} />
               <ExpDataRow label={t('expRfc')} value={selectedEmp.rfc || '—'} />
               <div className="exp-data-row">

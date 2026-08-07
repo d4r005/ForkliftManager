@@ -74,6 +74,8 @@ BEGIN
         'name', name,
         'curp', curp,
         'rfc', rfc,
+        'nss', nss,
+        'jobTitle', job_title,
         'dc3Vigencia', dc3_vigencia,
         'diplomaVigencia', diploma_vigencia,
         'photoPath', photo_path,
@@ -93,7 +95,7 @@ RETURNS JSONB AS $$
 DECLARE
   v_emp RECORD;
 BEGIN
-  SELECT employee_number, name, curp, rfc, dc3_vigencia, diploma_vigencia,
+  SELECT employee_number, name, curp, rfc, nss, job_title, dc3_vigencia, diploma_vigencia,
          photo_path, dc3_pdf_path, diploma_pdf_path
   INTO v_emp
   FROM app_users
@@ -110,6 +112,8 @@ BEGIN
       'name', v_emp.name,
       'curp', v_emp.curp,
       'rfc', v_emp.rfc,
+      'nss', v_emp.nss,
+      'jobTitle', v_emp.job_title,
       'dc3Vigencia', v_emp.dc3_vigencia,
       'diplomaVigencia', v_emp.diploma_vigencia,
       'photoPath', v_emp.photo_path,
@@ -126,6 +130,8 @@ CREATE OR REPLACE FUNCTION update_expediente(
   p_employee_number TEXT,
   p_curp TEXT DEFAULT NULL,
   p_rfc TEXT DEFAULT NULL,
+  p_nss TEXT DEFAULT NULL,
+  p_job_title TEXT DEFAULT NULL,
   p_dc3_vigencia DATE DEFAULT NULL,
   p_diploma_vigencia DATE DEFAULT NULL,
   p_photo_path TEXT DEFAULT NULL,
@@ -152,6 +158,8 @@ BEGIN
   UPDATE app_users SET
     curp = p_curp,
     rfc = p_rfc,
+    nss = p_nss,
+    job_title = p_job_title,
     dc3_vigencia = p_dc3_vigencia,
     diploma_vigencia = p_diploma_vigencia,
     photo_path = p_photo_path,
