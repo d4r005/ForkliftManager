@@ -1,5 +1,7 @@
-- [x] Crear componente `Navigation.jsx` con soporte para SideNav y BottomNav
-- [x] Modificar `Header.jsx` para eliminar la navegación antigua
-- [x] Actualizar `App.jsx` para incluir el componente `Navigation` y ajustar el layout
-- [x] Añadir estilos CSS en `main.css` para la navegación adaptativa
-- [x] Verificar el funcionamiento en diferentes tamaños de pantalla
+- [x] Optimizar motor de extracción de PDF (`pdfExtract.js`)
+    - [x] Implementar ordenación espacial (coordenadas Y, X)
+    - [x] Refinar expresiones regulares para CURP/RFC con ruidos y espacios
+- [x] Mejorar interfaz de Importación de PDF Maestro (`MasterPdfImport.jsx`)
+    - [x] Añadir visualizador de texto extraído (Debug)
+    - [x] Optimizar algoritmo de búsqueda de nombres (insensibilidad total)
+- [/] Verificar con el archivo del usuario

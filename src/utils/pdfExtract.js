@@ -19,7 +19,22 @@ export async function extractPdfText(file) {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    const text = content.items.map(item => item.str).join(' ');
+
+    // Ordenar espacialmente: de arriba a abajo (Y desc) y de izquierda a derecha (X asc)
+    const sortedItems = [...content.items].sort((a, b) => {
+      const yA = a.transform[5];
+      const yB = b.transform[5];
+      const xA = a.transform[4];
+      const xB = b.transform[4];
+
+      // Tolerancia de 5 unidades para considerar la misma línea
+      if (Math.abs(yA - yB) > 5) {
+        return yB - yA; // Superior primero
+      }
+      return xA - xB; // Izquierda primero
+    });
+
+    const text = sortedItems.map(item => item.str).join(' ');
     fullText += text + '\n';
   }
 
@@ -46,18 +61,20 @@ export function parseDocumentData(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(l => l);
 
   // CURP: 18 caracteres alfanuméricos, formato AAAA######AAAAAA##
-  // Manejar CURP con espacios opcionales (común en formatos DC3)
-  const curpRegex = /([A-Z]\s*[A-Z]\s*[A-Z]\s*[A-Z]\s*\d\s*\d\s*\d\s*\d\s*\d\s*\d\s*[A-Z]\s*[A-Z]\s*[A-Z]\s*[A-Z]\s*[A-Z]\s*[A-Z]\s*\d\s*[\dA-Z])/i;
+  // Manejar CURP con muchos espacios o ruidos entre caracteres
+  const curpRegex = /([A-Z\s]{4,8}\d[\d\s]{5,10}[A-Z\s]{6,10}\d[\dA-Z\s])/i;
   const curpMatch = cleanText.match(curpRegex);
   if (curpMatch) {
-    result.curp = curpMatch[1].replace(/\s+/g, '').toUpperCase();
+    const candidate = curpMatch[1].replace(/\s+/g, '').toUpperCase();
+    if (candidate.length === 18) result.curp = candidate;
   }
 
-  // RFC: 12-13 caracteres, formato AAAA######AAA o AAAA######AAA##
-  const rfcRegex = /([A-Z]\s*[A-Z]\s*[A-Z]\s*[A-Z]\s*\d\s*\d\s*\d\s*\d\s*\d\s*\d\s*[A-Z\d]\s*[A-Z\d]\s*[A-Z\d])/i;
+  // RFC: 12-13 caracteres
+  const rfcRegex = /([A-Z\s]{3,5}\d[\d\s]{5,8}[A-Z\d\s]{3,5})/i;
   const rfcMatch = cleanText.match(rfcRegex);
   if (rfcMatch) {
-    result.rfc = rfcMatch[1].replace(/\s+/g, '').toUpperCase();
+    const candidate = rfcMatch[1].replace(/\s+/g, '').toUpperCase();
+    if (candidate.length >= 12 && candidate.length <= 13) result.rfc = candidate;
   }
 
   // Fechas en formato DD/MM/AAAA, DD-MM-AAAA, o AAAA-MM-DD

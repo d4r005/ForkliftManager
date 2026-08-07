@@ -17,6 +17,7 @@ export default function MasterPdfImport({ onDone, onClose }) {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState(null);
   const [docType, setDocType] = useState('dc3'); // dc3 or diploma
+  const [showRawText, setShowRawText] = useState(null); // index of page to show raw text
 
   const fileRef = useRef(null);
 
@@ -37,29 +38,33 @@ export default function MasterPdfImport({ onDone, onClose }) {
     }
 
     // 2. Buscar si el NOMBRE EXACTO de algún empleado aparece en cualquier parte del texto
-    const upperText = fullPageText.toUpperCase();
+    // Normalizar ambos textos (quitar acentos, espacios extra)
+    const normalize = (s) => s?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ' ').trim() || '';
+    const normFullText = normalize(fullPageText);
+
     for (const emp of employees) {
       if (emp.name && emp.name.length > 5) {
-        if (upperText.includes(emp.name.toUpperCase())) {
-          return { employee: emp, certainty: 95, method: 'Nombre Directo' };
+        const normEmpName = normalize(emp.name);
+        if (normFullText.includes(normEmpName)) {
+          return { employee: emp, certainty: 98, method: 'Nombre Directo' };
         }
       }
     }
 
     // 3. Intentar por Nombre (fuzzy) if we have extracted something that looks like a name
     if (extractedData.name) {
-      const normalizedExtracted = extractedData.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const normalizedExtracted = normalize(extractedData.name);
 
       let best = null;
       let maxScore = 0;
 
       employees.forEach(emp => {
         if (!emp.name) return;
-        const normalizedEmp = emp.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const normalizedEmp = normalize(emp.name);
 
         // Split in words
-        const wordsExt = normalizedExtracted.split(/\s+/).filter(w => w.length > 2);
-        const wordsEmp = normalizedEmp.split(/\s+/).filter(w => w.length > 2);
+        const wordsExt = normalizedExtracted.split(' ').filter(w => w.length > 2);
+        const wordsEmp = normalizedEmp.split(' ').filter(w => w.length > 2);
 
         if (wordsExt.length === 0 || wordsEmp.length === 0) return;
 
@@ -73,7 +78,7 @@ export default function MasterPdfImport({ onDone, onClose }) {
         }
       });
 
-      if (maxScore > 0.5) {
+      if (maxScore > 0.4) {
         return { employee: best, certainty: Math.round(maxScore * 100), method: 'Nombre Difuso' };
       }
     }
@@ -98,13 +103,20 @@ export default function MasterPdfImport({ onDone, onClose }) {
       for (let i = 1; i <= totalPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        const text = content.items.map(item => item.str).join(' ');
+
+        // ORDENACIÓN ESPACIAL (Igual que en pdfExtract para consistencia en debug)
+        const sortedItems = [...content.items].sort((a, b) => {
+          if (Math.abs(a.transform[5] - b.transform[5]) > 5) return b.transform[5] - a.transform[5];
+          return a.transform[4] - b.transform[4];
+        });
+
+        const text = sortedItems.map(item => item.str).join(' ');
         const data = parseDocumentData(text);
         const match = findBestMatch(data, text);
 
         detectedPages.push({
           index: i - 1,
-          textSummary: text.substring(0, 150) + '...',
+          fullText: text,
           extracted: data,
           match: match,
           selectedEmpId: match?.employee?.employeeNumber || '',
@@ -228,6 +240,18 @@ export default function MasterPdfImport({ onDone, onClose }) {
                 <strong>{pages.length}</strong> {t('days')} (páginas) encontradas en <em>{file.name}</em>
               </div>
 
+              {showRawText !== null && (
+                <div style={{ position: 'absolute', inset: '20px', background: 'white', zIndex: 1000, padding: '20px', borderRadius: '12px', boxShadow: '0 0 40px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <h3>Texto extraído - Página {showRawText + 1}</h3>
+                    <button className="btn btn-sm btn-secondary" onClick={() => setShowRawText(null)}>Cerrar</button>
+                  </div>
+                  <pre style={{ flex: 1, overflow: 'auto', background: '#f5f5f5', padding: '10px', fontSize: '11px', whiteSpace: 'pre-wrap' }}>
+                    {pages[showRawText].fullText}
+                  </pre>
+                </div>
+              )}
+
               <div className="import-table-wrap" style={{ maxHeight: '400px' }}>
                 <table className="import-table">
                   <thead>
@@ -247,7 +271,10 @@ export default function MasterPdfImport({ onDone, onClose }) {
                         </td>
                         <td>{p.index + 1}</td>
                         <td style={{ fontSize: '12px' }}>
-                          <div><strong>{p.extracted.name || '—'}</strong></div>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <strong>{p.extracted.name || '—'}</strong>
+                            <button className="btn-link" onClick={() => setShowRawText(p.index)} title="Ver texto extraído">👁️</button>
+                          </div>
                           <div style={{ color: 'var(--text-secondary)' }}>CURP: {p.extracted.curp || '—'}</div>
                           <div style={{ color: 'var(--text-secondary)' }}>Vig: {p.extracted.vigencia || '—'}</div>
                         </td>
