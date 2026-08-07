@@ -566,91 +566,125 @@ function normalizeDate(dateStr) {
  * @param {number} pageIndex - Índice de la página (0-based)
  * @returns {Promise<Blob|null>} - Blob JPEG de la foto, o null
  */
+/**
+ * Extrae la fotografía embebida en una página de DC3.
+ *
+ * ENFOQUE: en vez de renderizar la página a canvas y recortar a ciegas
+ * (que requiere encontrar el texto "FOTOGRAFÍA" como referencia y falla
+ * cuando ese texto viene como imagen o no existe), aquí se extraen
+ * directamente las imágenes (XObjects) embebidas en la página del PDF
+ * y se identifica cuál es la foto del trabajador.
+ *
+ * Criterio: la foto es la primera imagen RGB (sin canal alfa, kind === 2)
+ * con orientación portrait (alto >= ancho). Si no hay una portrait, se
+ * toma la primera imagen RGB. Las imágenes RGBA (kind 3) suelen ser
+ * firmas/escudos y se descartan; las grayscale (kind 1) son excepcionales.
+ *
+ * @param {File|ArrayBuffer} file - El archivo PDF
+ * @param {number} pageIndex - Índice base-0 de la página
+ * @returns {Promise<Blob|null>} - JPEG blob de la foto, o null si no se encuentra
+ */
 export async function extractPhotoFromPdfPage(file, pageIndex) {
   try {
     const arrayBuffer = file instanceof ArrayBuffer ? file : await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     const page = await pdf.getPage(pageIndex + 1);
+    const ops = await page.getOperatorList();
+    const OPS = pdfjsLib.OPS;
 
-    // Renderizar a alta resolución (scale 2 = ~144 DPI)
-    const viewport = page.getViewport({ scale: 2 });
-    const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const ctx = canvas.getContext('2d');
-
-    await page.render({ canvasContext: ctx, viewport }).promise;
-
-    // Buscar la posición de "FOTOGRAF" en el texto de la página
-    const content = await page.getTextContent();
-    const photoItem = content.items.find(item =>
-      /FOTOGRAF/i.test(item.str)
-    );
-
-    let x, y, w, h;
-
-    if (photoItem) {
-      // Coordenadas del texto en el sistema del PDF (origin abajo-izq)
-      const tx = photoItem.transform[4];
-      const ty = photoItem.transform[5];
-      // Convertir a coordenadas de canvas (origin arriba-izq, escala 2)
-      const cx = tx * 2;
-      const cy = canvas.height - ty * 2;
-
-      // La foto suele estar en un recuadro al lado o debajo de "FOTOGRAFÍA"
-      // Típico del DC3: recuadro ~3cm x 3.5cm ( credential size)
-      // En píxeles a escala 2 (~144 DPI): 3cm ≈ 170px, 3.5cm ≈ 200px
-      w = 200;
-      h = 230;
-
-      // La etiqueta "FOTOGRAFÍA" suele estar arriba del recuadro o a un lado.
-      // Intentamos: si hay texto a la derecha de la etiqueta, la foto está abajo.
-      // Si no, la foto está a la derecha.
-      const hasTextRight = content.items.some(item =>
-        item.transform[4] > tx + 100 &&
-        Math.abs(item.transform[5] - ty) < 50 &&
-        item.str.trim().length > 0
-      );
-
-      if (hasTextRight) {
-        // Foto debajo de la etiqueta
-        x = cx - 10;
-        y = cy;
-      } else {
-        // Foto a la derecha de la etiqueta
-        x = cx + 80;
-        y = cy - 30;
+    // Recopilar todas las imágenes (XObjects) de la página
+    const images = [];
+    for (let i = 0; i < ops.fnArray.length; i++) {
+      if (ops.fnArray[i] === OPS.paintImageXObject || ops.fnArray[i] === OPS.paintJpegXObject) {
+        const imgName = ops.argsArray[i][0];
+        try {
+          const img = await new Promise((resolve, reject) => {
+            page.objs.get(imgName, resolve, reject);
+          });
+          images.push({ name: imgName, ...img });
+        } catch (e) {
+          // Saltar imágenes que no se puedan cargar
+        }
       }
-    } else {
-      // No se encontró "FOTOGRAFÍA" — usar heurística: esquina superior derecha
-      // del DC3 (donde suele estar la foto en formato oficial STPS)
-      w = 200;
-      h = 230;
-      x = canvas.width - w - 80;
-      y = 60;
     }
 
-    // Ajustar límites al canvas
-    x = Math.max(0, Math.min(x, canvas.width - w));
-    y = Math.max(0, Math.min(y, canvas.height - h));
+    if (images.length === 0) {
+      console.warn('extractPhotoFromPdfPage: no se encontraron imágenes en la página');
+      return null;
+    }
 
-    // Recortar
-    const photoCanvas = document.createElement('canvas');
-    photoCanvas.width = w;
-    photoCanvas.height = h;
-    const photoCtx = photoCanvas.getContext('2d');
-    photoCtx.drawImage(canvas, x, y, w, h, 0, 0, w, h);
+    // Filtrar solo imágenes RGB (kind 2) — las RGBA (kind 3) suelen ser
+    // firmas/escudos con transparencia, y las grayscale (kind 1) son raras.
+    const rgbImages = images.filter(img => img.kind === 2);
+    if (rgbImages.length === 0) {
+      console.warn('extractPhotoFromPdfPage: no hay imágenes RGB, probando con todas');
+      // Último recurso: usar la primera imagen disponible
+      if (images.length > 0) {
+        return imageDataToJpegBlob(images[0]);
+      }
+      return null;
+    }
 
-    // Convertir a JPEG
-    return new Promise((resolve) => {
-      photoCanvas.toBlob(
-        (blob) => resolve(blob),
-        'image/jpeg',
-        0.85
-      );
-    });
+    // Preferir orientación portrait (alto >= ancho), típica de foto de credencial
+    let photo = rgbImages.find(img => img.height >= img.width);
+    if (!photo) photo = rgbImages[0]; // fallback: primera RGB
+
+    return imageDataToJpegBlob(photo);
   } catch (err) {
     console.warn('extractPhotoFromPdfPage: no se pudo extraer foto:', err);
     return null;
   }
+}
+
+/**
+ * Convierte los datos crudos de una imagen pdfjs a un JPEG Blob.
+ * Funciona en el navegador usando canvas.
+ * @param {{width:number, height:number, kind:number, data:Uint8Array}} img
+ * @returns {Promise<Blob|null>}
+ */
+function imageDataToJpegBlob(img) {
+  return new Promise((resolve) => {
+    try {
+      const channels = img.kind === 1 ? 1 : (img.kind === 2 ? 3 : 4);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+
+      // Crear ImageData y copiar los píxeles
+      const imageData = ctx.createImageData(img.width, img.height);
+      const src = img.data;
+      const dst = imageData.data;
+
+      if (channels === 3) {
+        // RGB -> RGBA
+        for (let i = 0, j = 0; i < dst.length; i += 4, j += 3) {
+          dst[i] = src[j];
+          dst[i + 1] = src[j + 1];
+          dst[i + 2] = src[j + 2];
+          dst[i + 3] = 255;
+        }
+      } else if (channels === 4) {
+        // RGBA -> RGBA (copia directa)
+        dst.set(src);
+      } else if (channels === 1) {
+        // Grayscale -> RGBA
+        for (let i = 0, j = 0; i < dst.length; i += 4, j++) {
+          dst[i] = dst[i + 1] = dst[i + 2] = src[j];
+          dst[i + 3] = 255;
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+
+      canvas.toBlob(
+        (blob) => resolve(blob),
+        'image/jpeg',
+        0.90
+      );
+    } catch (e) {
+      console.warn('imageDataToJpegBlob: error:', e);
+      resolve(null);
+    }
+  });
 }
