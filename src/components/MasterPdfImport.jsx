@@ -143,6 +143,7 @@ export default function MasterPdfImport({ onDone, onClose }) {
     try {
       const toImport = pages.filter(p => p.included && p.selectedEmpId);
       let successCount = 0;
+      const failures = [];
 
       for (const p of toImport) {
         const pageDocType = p.resolvedType === 'diploma' ? 'diploma' : 'dc3';
@@ -176,15 +177,25 @@ export default function MasterPdfImport({ onDone, onClose }) {
 
         const { data: updateRes, error: updateError } = await supabase.rpc('update_expediente', updateParams);
         if (updateError || !updateRes?.success) {
-          console.warn(`Error updating employee ${p.selectedEmpId}:`, updateError || updateRes?.error);
+          const reason = updateError?.message || updateRes?.error || 'error desconocido';
+          console.warn(`Error updating employee ${p.selectedEmpId}:`, reason);
+          failures.push(`Pág ${p.index + 1} (#${p.selectedEmpId}): ${reason}`);
         } else {
           successCount++;
         }
       }
 
-      alert(`Importación completada: ${successCount} documentos asignados.`);
-      if (onDone) onDone();
-      onClose();
+      if (failures.length > 0) {
+        setError(
+          `Se asignaron ${successCount} de ${toImport.length} documentos. ` +
+          `Fallaron ${failures.length}:\n` + failures.slice(0, 8).join('\n') +
+          (failures.length > 8 ? `\n... y ${failures.length - 8} más` : '')
+        );
+      } else {
+        alert(`Importación completada: ${successCount} documentos asignados.`);
+        if (onDone) onDone();
+        onClose();
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -217,7 +228,7 @@ export default function MasterPdfImport({ onDone, onClose }) {
         </div>
 
         <div className="excel-import-body">
-          {error && <div className="alert alert-error">⚠️ {error}</div>}
+          {error && <div className="alert alert-error" style={{ whiteSpace: 'pre-line' }}>⚠️ {error}</div>}
 
           <div className="instructions-banner">
             <p>{t('expMasterPdfDesc')}</p>

@@ -215,6 +215,28 @@ function extractBoxedCode(lines, minLen, maxLen, validator) {
   return null;
 }
 
+// Vigencia estándar de la industria para constancias DC3 de operador de
+// montacargas bajo NOM-006-STPS: 2 años a partir de la fecha de ejecución
+// del curso. El DC3 en sí no fija por ley una fecha de caducidad — esta es
+// la práctica común de renovación usada por capacitadoras STPS en México.
+// Si tu empresa usa otro periodo, ajusta esta constante.
+const DC3_VALIDITY_YEARS = 2;
+
+/**
+ * Suma años a una fecha en formato ISO (AAAA-MM-DD).
+ */
+function addYears(isoDate, years) {
+  if (!isoDate) return null;
+  const [y, m, d] = isoDate.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const dt = new Date(y, m - 1, d);
+  dt.setFullYear(dt.getFullYear() + years);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
 const CURP_RE = /^[A-Z]{4}\d{6}[A-Z]{6}[A-Z0-9]\d$/;
 const RFC_RE = /^[A-Z]{3,4}\d{6}[A-Z0-9]{3}$/;
 
@@ -263,20 +285,57 @@ export function parseDocumentData(text) {
   result.name = extractNameFromLines(lines);
 
   // === Fechas ===
-  const datePatterns = [
+  // Los DC3/Diplomas de este formato NO traen una fecha de "vigencia/expira"
+  // explícita: solo indican cuándo se impartió el curso ("Periodo de
+  // ejecución" en el DC3, o la fecha de firma en el Diploma). Por práctica
+  // de la industria para certificaciones de operador de montacargas
+  // (NOM-006-STPS), la vigencia de la constancia se calcula como la fecha
+  // de ejecución/finalización del curso + DC3_VALIDITY_YEARS (2 años).
+  // Si el documento SÍ trae una frase explícita de vigencia, esa tiene
+  // prioridad sobre el cálculo automático.
+  const allDates = [];
+
+  // Formato "DD/MM/AAAA", "DD-MM-AAAA", "AAAA-MM-DD"
+  const slashDashPatterns = [
     /(\d{1,2}\/\d{1,2}\/\d{4})/g,
     /(\d{1,2}-\d{1,2}-\d{4})/g,
     /(\d{4}-\d{1,2}-\d{1,2})/g,
   ];
-
-  const allDates = [];
-  for (const pattern of datePatterns) {
+  for (const pattern of slashDashPatterns) {
     let m;
     while ((m = pattern.exec(cleanText)) !== null) {
-      allDates.push(m[1]);
+      const iso = normalizeDate(m[1]);
+      if (iso) allDates.push(iso);
     }
   }
 
+  // Formato STPS DC3 en columnas "Año Mes Día" sin separadores, p.ej. "2026 07 22"
+  // (el DC3 oficial presenta la fecha en 3 celdas separadas: Año, Mes, Día)
+  const ymdColumnRegex = /\b(20\d{2})\s+(0[1-9]|1[0-2])\s+(0[1-9]|[12]\d|3[01])\b/g;
+  {
+    let m;
+    while ((m = ymdColumnRegex.exec(cleanText)) !== null) {
+      allDates.push(`${m[1]}-${m[2]}-${m[3]}`);
+    }
+  }
+
+  // Formato español largo, p.ej. "22 DE JULIO DEL 2026" (usado en diplomas)
+  const MONTHS_ES = {
+    ENERO: '01', FEBRERO: '02', MARZO: '03', ABRIL: '04', MAYO: '05', JUNIO: '06',
+    JULIO: '07', AGOSTO: '08', SEPTIEMBRE: '09', OCTUBRE: '10', NOVIEMBRE: '11', DICIEMBRE: '12',
+  };
+  const longDateRegex = /\b(\d{1,2})\s+DE\s+([A-ZÁÉÍÓÚ]+)\s+DEL?\s+(\d{4})\b/gi;
+  {
+    let m;
+    while ((m = longDateRegex.exec(cleanText.toUpperCase())) !== null) {
+      const monthNum = MONTHS_ES[m[2]];
+      if (monthNum) {
+        allDates.push(`${m[3]}-${monthNum}-${String(m[1]).padStart(2, '0')}`);
+      }
+    }
+  }
+
+  // 1) Vigencia EXPLÍCITA (si el documento la declara) — máxima prioridad
   const vigenciaPatterns = [
     /vigencia[^0-9]*(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}-\d{1,2}-\d{1,2})/i,
     /válid[ao][^0-9]*(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}-\d{1,2}-\d{1,2})/i,
@@ -285,7 +344,6 @@ export function parseDocumentData(text) {
     /hasta[^0-9]*(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}-\d{1,2}-\d{1,2})/i,
     /vigente[^0-9]*(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}-\d{1,2}-\d{1,2})/i,
   ];
-
   for (const vp of vigenciaPatterns) {
     const vm = cleanText.match(vp);
     if (vm) {
@@ -294,10 +352,18 @@ export function parseDocumentData(text) {
     }
   }
 
-  if (!result.vigencia && allDates.length > 0) {
-    const lastDate = allDates[allDates.length - 1];
-    result.vigencia = normalizeDate(lastDate);
-    result.fechaCapacitacion = allDates[0] ? normalizeDate(allDates[0]) : null;
+  // 2) Fecha de ejecución/finalización del curso: la más reciente de las
+  //    detectadas en la página (la fecha "a" del periodo de ejecución, o la
+  //    fecha de firma del diploma, suele ser cronológicamente la última).
+  if (allDates.length > 0) {
+    const sorted = [...new Set(allDates)].sort(); // orden ISO = orden cronológico
+    result.fechaCapacitacion = sorted[sorted.length - 1];
+
+    // 3) Si no había vigencia explícita, calcularla: fecha de ejecución + 2 años
+    //    (vigencia estándar del sector para constancias DC3 de montacarguistas).
+    if (!result.vigencia) {
+      result.vigencia = addYears(result.fechaCapacitacion, DC3_VALIDITY_YEARS);
+    }
   }
 
   // === Curso ===

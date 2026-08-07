@@ -1,35 +1,48 @@
 -- =====================================================
--- FIX: update_expediente() estaba BORRANDO datos en cada llamada parcial
+-- FIX: update_expediente() - dos problemas encontrados
 -- Fecha: 2026-08-07
 --
--- PROBLEMA ENCONTRADO:
--- La función original hacía:
---     UPDATE app_users SET curp = p_curp, rfc = p_rfc, ... WHERE ...
--- Todos los parámetros (p_curp, p_rfc, p_nss, p_job_title, p_photo_path,
--- p_dc3_pdf_path, p_diploma_pdf_path) tienen DEFAULT NULL.
+-- PROBLEMA 1 (causa de "0 documentos asignados"):
+-- En tu base de datos existen DOS versiones (overloads) de update_expediente:
+--   A) update_expediente(p_admin_employee_number, p_employee_number, p_curp,
+--      p_rfc, p_dc3_vigencia, p_diploma_vigencia, p_photo_path,
+--      p_dc3_pdf_path, p_diploma_pdf_path)                    -- 9 parámetros (vieja)
+--   B) la misma pero con p_nss y p_job_title agregados          -- 11 parámetros (nueva)
 --
--- MasterPdfImport.jsx (la importación masiva de PDF) SOLO envía el campo
--- del documento que está subiendo en ese momento (p.ej. p_dc3_pdf_path),
--- dejando el resto de los parámetros en su valor por defecto (NULL).
--- Como el UPDATE los asigna sin condición, cada importación BORRABA:
---   - El CURP y RFC ya guardados del empleado
---   - El puesto (job_title) y la foto
---   - La ruta del OTRO documento (p.ej. subir el Diploma borraba el DC3)
+-- Esto pasó porque en algún momento se agregó nss/job_title con
+-- CREATE OR REPLACE, pero como la lista de parámetros cambió, Postgres la
+-- registró como una función NUEVA en vez de reemplazar la vieja — quedaron
+-- las dos coexistiendo.
 --
--- Esto es, casi con toda seguridad, la causa raíz de que el importador
--- deje de encontrar coincidencias por CURP con el tiempo: el CURP de
--- los empleados se va poniendo en NULL en la base de datos a medida que
--- se usa el importador.
+-- Cuando MasterPdfImport.jsx llama al RPC enviando solo ALGUNOS parámetros
+-- (p.ej. solo admin + employee + dc3_pdf_path), Postgres/PostgREST no puede
+-- decidir cuál de las dos funciones usar (ambas son candidatas válidas) y
+-- responde con error "Could not choose the best candidate function" (código
+-- PGRST203). El código no mostraba ese error al usuario, solo lo registraba
+-- en la consola del navegador, por eso se veía como "0 documentos asignados"
+-- sin explicación. (EmployeeRecords.jsx nunca tuvo el problema porque siempre
+-- manda TODOS los parámetros, lo que resuelve la ambigüedad).
 --
--- SOLUCIÓN: usar COALESCE(parametro, valor_actual) para que un parámetro
--- no enviado (NULL) conserve el valor que ya existía en la fila, en vez
--- de borrarlo.
+-- PROBLEMA 2 (visto antes):
+-- La función hacía UPDATE ... SET curp = p_curp (sin COALESCE), así que un
+-- parámetro no enviado (NULL por default) borraba el valor ya guardado.
 --
--- CÓMO APLICAR: pega y ejecuta este archivo completo en el SQL Editor de
--- tu proyecto de Supabase (Supabase Dashboard -> SQL Editor -> New query).
--- Es seguro ejecutarlo aunque ya tengas la versión anterior de la función.
+-- SOLUCIÓN: eliminar la versión vieja (9 parámetros) y dejar solo la de 11
+-- parámetros, con COALESCE para que un campo no enviado conserve su valor.
+--
+-- CÓMO APLICAR: pega y ejecuta este archivo completo en el SQL Editor de tu
+-- proyecto de Supabase (Dashboard -> SQL Editor -> New query -> Run).
+-- Es seguro ejecutarlo aunque ya hayas corrido una versión anterior de este fix.
 -- =====================================================
 
+-- 1) Eliminar la versión vieja (9 parámetros, sin nss/job_title) que causa
+--    la ambigüedad. Si esta firma exacta no existe, el DROP simplemente no
+--    hace nada (gracias a IF EXISTS) y no da error.
+DROP FUNCTION IF EXISTS update_expediente(
+  text, text, text, text, date, date, text, text, text
+);
+
+-- 2) Dejar UNA sola versión correcta (11 parámetros) con COALESCE.
 CREATE OR REPLACE FUNCTION update_expediente(
   p_admin_employee_number TEXT,
   p_employee_number TEXT,
@@ -81,6 +94,11 @@ BEGIN
   RETURN jsonb_build_object('success', true);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 3) Verificación: debe existir SOLO UNA función llamada update_expediente.
+--    Corre esto después y confirma que devuelve 1 sola fila.
+-- SELECT proname, pg_get_function_arguments(oid)
+-- FROM pg_proc WHERE proname = 'update_expediente';
 
 -- NOTA: si en algún momento SÍ necesitas borrar explícitamente un campo
 -- (por ejemplo, quitar una foto), esta versión con COALESCE ya no lo
