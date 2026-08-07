@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MontaControl</string>
+    <string name="app_subtitle">Hệ thống kiểm tra xe nâng</string>
+    <string name="loading">Đang tải...</string>
+</resources>

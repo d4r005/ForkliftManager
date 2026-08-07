@@ -45,57 +45,51 @@ ALTER TABLE forklifts DISABLE ROW LEVEL SECURITY;
 ALTER TABLE checklists DISABLE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE FUNCTION login_user(p_employee_number TEXT, p_password TEXT)
-RETURNS JSONB AS $func$
+RETURNS JSONB AS '
 DECLARE
   v_user app_users%ROWTYPE;
 BEGIN
   SELECT * INTO v_user FROM app_users
   WHERE employee_number = p_employee_number AND is_active = true;
   IF v_user.id IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error', 'user_not_found');
+    RETURN jsonb_build_object(''success'', false, ''error'', ''user_not_found'');
   END IF;
   IF v_user.password_hash != crypt(p_password, v_user.password_hash) THEN
-    RETURN jsonb_build_object('success', false, 'error', 'invalid_password');
+    RETURN jsonb_build_object(''success'', false, ''error'', ''invalid_password'');
   END IF;
   RETURN jsonb_build_object(
-    'success', true,
-    'user', jsonb_build_object(
-      'id', v_user.id,
-      'employeeNumber', v_user.employee_number,
-      'name', v_user.name,
-      'role', v_user.role
+    ''success'', true,
+    ''user'', jsonb_build_object(
+      ''id'', v_user.id,
+      ''employeeNumber'', v_user.employee_number,
+      ''name'', v_user.name,
+      ''role'', v_user.role
     )
   );
 END;
-$func$ LANGUAGE plpgsql SECURITY DEFINER;
+' LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION change_password(p_employee_number TEXT, p_old_password TEXT, p_new_password TEXT)
-RETURNS JSONB AS $func$
+RETURNS JSONB AS '
 DECLARE
   v_user app_users%ROWTYPE;
 BEGIN
   SELECT * INTO v_user FROM app_users
   WHERE employee_number = p_employee_number AND is_active = true;
   IF v_user.id IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error', 'user_not_found');
+    RETURN jsonb_build_object(''success'', false, ''error'', ''user_not_found'');
   END IF;
   IF v_user.password_hash != crypt(p_old_password, v_user.password_hash) THEN
-    RETURN jsonb_build_object('success', false, 'error', 'invalid_password');
+    RETURN jsonb_build_object(''success'', false, ''error'', ''invalid_password'');
   END IF;
-  UPDATE app_users SET password_hash = crypt(p_new_password, gen_salt('bf')), updated_at = now()
+  UPDATE app_users SET password_hash = crypt(p_new_password, gen_salt(''bf'')), updated_at = now()
   WHERE id = v_user.id;
-  RETURN jsonb_build_object('success', true);
+  RETURN jsonb_build_object(''success'', true);
 END;
-$func$ LANGUAGE plpgsql SECURITY DEFINER;
+' LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE OR REPLACE FUNCTION create_user(
-  p_admin_employee_number TEXT,
-  p_employee_number TEXT,
-  p_password TEXT,
-  p_name TEXT,
-  p_role TEXT DEFAULT 'user'
-)
-RETURNS JSONB AS $func$
+CREATE OR REPLACE FUNCTION create_user(p_admin_employee_number TEXT, p_employee_number TEXT, p_password TEXT, p_name TEXT, p_role TEXT DEFAULT 'user')
+RETURNS JSONB AS '
 DECLARE
   v_admin app_users%ROWTYPE;
   v_exists INT;
@@ -103,117 +97,107 @@ DECLARE
 BEGIN
   SELECT * INTO v_admin FROM app_users WHERE employee_number = p_admin_employee_number AND is_active = true;
   IF v_admin.id IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error', 'admin_not_found');
+    RETURN jsonb_build_object(''success'', false, ''error'', ''admin_not_found'');
   END IF;
-  IF v_admin.role != 'admin' THEN
-    RETURN jsonb_build_object('success', false, 'error', 'not_authorized');
+  IF v_admin.role != ''admin'' THEN
+    RETURN jsonb_build_object(''success'', false, ''error'', ''not_authorized'');
   END IF;
   SELECT COUNT(*) INTO v_exists FROM app_users WHERE employee_number = p_employee_number;
   IF v_exists > 0 THEN
-    RETURN jsonb_build_object('success', false, 'error', 'employee_exists');
+    RETURN jsonb_build_object(''success'', false, ''error'', ''employee_exists'');
   END IF;
   INSERT INTO app_users (employee_number, password_hash, name, role)
-  VALUES (p_employee_number, crypt(p_password, gen_salt('bf')), p_name, p_role)
+  VALUES (p_employee_number, crypt(p_password, gen_salt(''bf'')), p_name, p_role)
   RETURNING id, employee_number, name, role, is_active, created_at INTO v_new;
   RETURN jsonb_build_object(
-    'success', true,
-    'user', jsonb_build_object(
-      'id', v_new.id,
-      'employeeNumber', v_new.employee_number,
-      'name', v_new.name,
-      'role', v_new.role,
-      'isActive', v_new.is_active,
-      'createdAt', v_new.created_at
+    ''success'', true,
+    ''user'', jsonb_build_object(
+      ''id'', v_new.id,
+      ''employeeNumber'', v_new.employee_number,
+      ''name'', v_new.name,
+      ''role'', v_new.role,
+      ''isActive'', v_new.is_active,
+      ''createdAt'', v_new.created_at
     )
   );
 END;
-$func$ LANGUAGE plpgsql SECURITY DEFINER;
+' LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION get_users(p_admin_employee_number TEXT)
-RETURNS JSONB AS $func$
+RETURNS JSONB AS '
 DECLARE
   v_admin app_users%ROWTYPE;
+  v_users JSONB;
 BEGIN
   SELECT * INTO v_admin FROM app_users WHERE employee_number = p_admin_employee_number AND is_active = true;
   IF v_admin.id IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error', 'admin_not_found');
+    RETURN jsonb_build_object(''success'', false, ''error'', ''admin_not_found'');
   END IF;
-  IF v_admin.role != 'admin' THEN
-    RETURN jsonb_build_object('success', false, 'error', 'not_authorized');
+  IF v_admin.role != ''admin'' THEN
+    RETURN jsonb_build_object(''success'', false, ''error'', ''not_authorized'');
   END IF;
-  RETURN jsonb_build_object(
-    'success', true,
-    'users', (
-      SELECT jsonb_agg(
-        jsonb_build_object(
-          'id', id,
-          'employeeNumber', employee_number,
-          'name', name,
-          'role', role,
-          'isActive', is_active,
-          'createdAt', created_at
-        )
-      )
-      FROM app_users ORDER BY created_at ASC
-    )
-  );
+  SELECT jsonb_agg(x) INTO v_users FROM (
+    SELECT jsonb_build_object(
+      ''id'', id,
+      ''employeeNumber'', employee_number,
+      ''name'', name,
+      ''role'', role,
+      ''isActive'', is_active,
+      ''createdAt'', created_at
+    ) AS x
+    FROM app_users ORDER BY created_at ASC
+  ) sub;
+  RETURN jsonb_build_object(''success'', true, ''users'', COALESCE(v_users, ''[]''::jsonb));
 END;
-$func$ LANGUAGE plpgsql SECURITY DEFINER;
+' LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE OR REPLACE FUNCTION update_user(
-  p_admin_employee_number TEXT,
-  p_user_id UUID,
-  p_name TEXT DEFAULT NULL,
-  p_role TEXT DEFAULT NULL,
-  p_is_active BOOLEAN DEFAULT NULL,
-  p_password TEXT DEFAULT NULL
-)
-RETURNS JSONB AS $func$
+CREATE OR REPLACE FUNCTION update_user(p_admin_employee_number TEXT, p_user_id UUID, p_name TEXT DEFAULT NULL, p_role TEXT DEFAULT NULL, p_is_active BOOLEAN DEFAULT NULL, p_password TEXT DEFAULT NULL)
+RETURNS JSONB AS '
 DECLARE
   v_admin app_users%ROWTYPE;
 BEGIN
   SELECT * INTO v_admin FROM app_users WHERE employee_number = p_admin_employee_number AND is_active = true;
   IF v_admin.id IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error', 'admin_not_found');
+    RETURN jsonb_build_object(''success'', false, ''error'', ''admin_not_found'');
   END IF;
-  IF v_admin.role != 'admin' THEN
-    RETURN jsonb_build_object('success', false, 'error', 'not_authorized');
+  IF v_admin.role != ''admin'' THEN
+    RETURN jsonb_build_object(''success'', false, ''error'', ''not_authorized'');
   END IF;
   UPDATE app_users SET
     name = COALESCE(p_name, name),
     role = COALESCE(p_role, role),
     is_active = COALESCE(p_is_active, is_active),
-    password_hash = CASE WHEN p_password IS NOT NULL THEN crypt(p_password, gen_salt('bf')) ELSE password_hash END,
+    password_hash = CASE WHEN p_password IS NOT NULL THEN crypt(p_password, gen_salt(''bf'')) ELSE password_hash END,
     updated_at = now()
   WHERE id = p_user_id;
-  RETURN jsonb_build_object('success', true);
+  RETURN jsonb_build_object(''success'', true);
 END;
-$func$ LANGUAGE plpgsql SECURITY DEFINER;
+' LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION delete_user(p_admin_employee_number TEXT, p_user_id UUID)
-RETURNS JSONB AS $func$
+RETURNS JSONB AS '
 DECLARE
   v_admin app_users%ROWTYPE;
 BEGIN
   SELECT * INTO v_admin FROM app_users WHERE employee_number = p_admin_employee_number AND is_active = true;
   IF v_admin.id IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error', 'admin_not_found');
+    RETURN jsonb_build_object(''success'', false, ''error'', ''admin_not_found'');
   END IF;
-  IF v_admin.role != 'admin' THEN
-    RETURN jsonb_build_object('success', false, 'error', 'not_authorized');
+  IF v_admin.role != ''admin'' THEN
+    RETURN jsonb_build_object(''success'', false, ''error'', ''not_authorized'');
   END IF;
   DELETE FROM app_users WHERE id = p_user_id;
-  RETURN jsonb_build_object('success', true);
+  RETURN jsonb_build_object(''success'', true);
 END;
-$func$ LANGUAGE plpgsql SECURITY DEFINER;
+' LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION handle_updated_at()
-RETURNS TRIGGER AS $func$
+RETURNS TRIGGER AS '
 BEGIN
   NEW.updated_at = now();
   RETURN NEW;
 END;
-$func$ LANGUAGE plpgsql;
+' LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS app_users_updated_at ON app_users;
 CREATE TRIGGER app_users_updated_at BEFORE UPDATE ON app_users
