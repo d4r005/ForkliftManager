@@ -8,6 +8,7 @@ import ChecklistForm from './components/ChecklistForm.jsx';
 import SavedChecklists from './components/SavedChecklists.jsx';
 import ForkliftManager from './components/ForkliftManager.jsx';
 import UserManager from './components/UserManager.jsx';
+import EmployeeRecords from './components/EmployeeRecords.jsx';
 import Login from './components/Login.jsx';
 import { exportChecklistToExcel } from './utils/exportExcel.js';
 
@@ -121,6 +122,10 @@ function AppContent() {
 
         {view === 'users' && user.role === 'admin' && (
           <UserManager />
+        )}
+
+        {view === 'expedientes' && (
+          <EmployeeRecords />
         )}
       </main>
 

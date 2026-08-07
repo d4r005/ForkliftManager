@@ -80,6 +80,12 @@ export default function Header({ view, setView, checklistCount }) {
         >
           🚜 {t('forklifts')}
         </button>
+        <button
+          className={`nav-btn ${view === 'expedientes' ? 'active' : ''}`}
+          onClick={() => setView('expedientes')}
+        >
+          📁 {t('expTitle')}
+        </button>
         {isAdmin && (
           <button
             className={`nav-btn ${view === 'users' ? 'active' : ''}`}
