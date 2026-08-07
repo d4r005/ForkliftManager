@@ -136,6 +136,19 @@ function longestBoxedRun(line) {
   return best;
 }
 
+/**
+ * Algunos DC3/Diplomas usan una letra inicial decorativa como elemento de
+ * texto SEPARADO del resto de la palabra (p.ej. el PDF renderiza "R" y
+ * "OBLES" como dos objetos de texto distintos en vez de "ROBLES"). Esto deja
+ * un espacio falso justo después de la primera letra de un nombre/puesto.
+ * Esta función detecta ese patrón puntual y lo corrige, sin tocar espacios
+ * legítimos entre palabras reales.
+ */
+function fixSplitFirstLetter(s) {
+  if (!s) return s;
+  return s.replace(/^([A-ZÁÉÍÓÚÑ])\s+([A-ZÁÉÍÓÚÑ]{2,})/, '$1$2');
+}
+
 function isPlausibleName(s) {
   if (!s) return false;
   const t = s.trim();
@@ -166,14 +179,15 @@ function extractNameFromLines(lines) {
     const up = upperLines[i];
     if (/^NOMBRE\b/.test(up) && !NAME_LABEL_EXCLUDE.test(up)) {
       // Si la etiqueta trae valor pegado tras el paréntesis de instrucciones o ':'
-      const afterParen = raw.replace(/^nombre.*?\)\s*/i, '').trim();
-      const afterColon = raw.replace(/^nombre[^:]*:\s*/i, '').trim();
+      const afterParen = fixSplitFirstLetter(raw.replace(/^nombre.*?\)\s*/i, '').trim());
+      const afterColon = fixSplitFirstLetter(raw.replace(/^nombre[^:]*:\s*/i, '').trim());
       const candidate = afterParen !== raw ? afterParen : (afterColon !== raw ? afterColon : '');
       if (isPlausibleName(candidate)) return candidate;
 
       // Si no, el valor suele estar en la(s) línea(s) siguiente(s) (celda de abajo)
       for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
-        if (isPlausibleName(lines[j])) return lines[j].trim();
+        const cand = fixSplitFirstLetter(lines[j].trim());
+        if (isPlausibleName(cand)) return cand;
       }
     }
   }
@@ -182,7 +196,7 @@ function extractNameFromLines(lines) {
   const idxPor = upperLines.findIndex(l => l.includes('POR HABER CONCLUIDO') || l.includes('POR HABER'));
   if (idxPor > 0) {
     for (let j = idxPor - 1; j >= 0 && j >= idxPor - 4; j--) {
-      const cand = lines[j].trim();
+      const cand = fixSplitFirstLetter(lines[j].trim());
       const upCand = cand.toUpperCase();
       if (NON_NAME_WORDS.has(upCand)) continue;
       if (isPlausibleName(cand)) return cand;
@@ -193,11 +207,44 @@ function extractNameFromLines(lines) {
   for (let i = 0; i < lines.length; i++) {
     const up = upperLines[i];
     if (up.includes('NOMBRE') && !NAME_LABEL_EXCLUDE.test(up)) {
-      const val = lines[i].replace(/.*nombre[^:]*:?/i, '').trim();
+      const val = fixSplitFirstLetter(lines[i].replace(/.*nombre[^:]*:?/i, '').trim());
       if (isPlausibleName(val)) return val;
     }
   }
 
+  return null;
+}
+
+const JOB_TITLE_LABEL_EXCLUDE = /(RAZON SOCIAL|RAZÓN SOCIAL|DEL CURSO|EMPRESA|OCUPACION|OCUPACIÓN)/i;
+
+function isPlausibleJobTitle(s) {
+  if (!s) return false;
+  const t = s.trim();
+  if (t.length < 3 || t.length > 60) return false;
+  if (!/^[A-ZÁÉÍÓÚÑ0-9][A-ZÁÉÍÓÚÑ0-9\s.\-\/]+$/i.test(t)) return false;
+  return true;
+}
+
+/**
+ * Busca el puesto/cargo del trabajador. En el DC3 aparece bajo la etiqueta
+ * "Puesto*", con el valor en la línea siguiente (misma mecánica de celdas
+ * que el nombre, incluyendo la letra inicial separada del resto).
+ */
+function extractJobTitleFromLines(lines) {
+  const upperLines = lines.map(l => l.toUpperCase());
+  for (let i = 0; i < lines.length; i++) {
+    const up = upperLines[i];
+    if (/^PUESTO\b/.test(up) && !JOB_TITLE_LABEL_EXCLUDE.test(up)) {
+      const afterColon = fixSplitFirstLetter(lines[i].replace(/^puesto[^:*]*[:*]?\s*/i, '').trim());
+      if (isPlausibleJobTitle(afterColon) && afterColon.toUpperCase() !== up.replace(/[*:]/g, '').trim()) {
+        return afterColon;
+      }
+      for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
+        const cand = fixSplitFirstLetter(lines[j].trim());
+        if (isPlausibleJobTitle(cand)) return cand;
+      }
+    }
+  }
   return null;
 }
 
@@ -208,11 +255,56 @@ function extractNameFromLines(lines) {
 function extractBoxedCode(lines, minLen, maxLen, validator) {
   for (const line of lines) {
     const boxed = longestBoxedRun(line).toUpperCase();
-    if (boxed.length >= minLen && boxed.length <= maxLen && validator(boxed)) {
-      return boxed;
+    if (!boxed || boxed.length < minLen) continue;
+    // Probar todas las subcadenas de longitud [minLen, maxLen] dentro de la
+    // corrida encontrada (de mayor a menor longitud). Esto es necesario
+    // porque a veces un token vecino de 1 solo carácter (p.ej. un "0" suelto
+    // de un código de ocupación como "0 4.6") se pega sin querer a la
+    // corrida real, dejando el CURP/RFC "escondido" dentro de una cadena
+    // más larga en vez de ser exactamente boxed.length === CURP/RFC.length.
+    for (let len = Math.min(maxLen, boxed.length); len >= minLen; len--) {
+      for (let start = 0; start + len <= boxed.length; start++) {
+        const candidate = boxed.slice(start, start + len);
+        if (validator(candidate)) return candidate;
+      }
     }
   }
   return null;
+}
+
+/**
+ * Busca en una línea la corrida de casillas de fecha en formato oficial
+ * STPS: "Año Mes Día a Año Mes Día" con cada dígito en su propia celda
+ * (p.ej. "2 0 2 6 0 7 2 2 a 2 0 2 6 0 7 2 2"). Devuelve { start, end } en
+ * formato ISO (AAAA-MM-DD), o null si no encuentra el patrón.
+ */
+function extractBoxedDateRange(lines) {
+  const pattern = /(\d{4})(\d{2})(\d{2})a(\d{4})(\d{2})(\d{2})/i;
+  for (const line of lines) {
+    const boxed = longestBoxedRun(line).toLowerCase();
+    const m = boxed.match(pattern);
+    if (m) {
+      return {
+        start: `${m[1]}-${m[2]}-${m[3]}`,
+        end: `${m[4]}-${m[5]}-${m[6]}`,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Recorta las líneas a solo la sección "DATOS DEL TRABAJADOR" (antes de
+ * "DATOS DE LA EMPRESA"). El CURP/RFC de la EMPRESA (que sí aparece en el
+ * DC3, bajo "Registro Federal de Contribuyentes con homoclave") NO es el
+ * RFC del trabajador — si no acotamos la búsqueda, se puede confundir uno
+ * con el otro. Comparamos sin espacios porque algunas celdas de tabla
+ * quedan pegadas sin espacio (p.ej. "DATOS DELAEMPRESA").
+ */
+function employeeSectionLines(lines) {
+  const noSpace = (s) => s.toUpperCase().replace(/\s+/g, '');
+  const cutoffIdx = lines.findIndex(l => noSpace(l).includes('DATOSDELAEMPRESA'));
+  return cutoffIdx > 0 ? lines.slice(0, cutoffIdx) : lines;
 }
 
 // Vigencia estándar de la industria para constancias DC3 de operador de
@@ -250,6 +342,7 @@ export function parseDocumentData(text) {
     name: null,
     curp: null,
     rfc: null,
+    jobTitle: null,
     vigencia: null,
     fechaCapacitacion: null,
     curso: null,
@@ -258,31 +351,55 @@ export function parseDocumentData(text) {
 
   const cleanText = (text || '').replace(/\s+/g, ' ').trim();
   const lines = (text || '').split('\n').map(l => l.trim()).filter(l => l);
+  // El CURP/RFC del TRABAJADOR solo puede estar en la sección "DATOS DEL
+  // TRABAJADOR"; acotamos ahí para no confundirlo con el RFC de la EMPRESA
+  // (que también aparece en el DC3, más abajo).
+  const empLines = employeeSectionLines(lines);
+  const empText = empLines.join(' ');
 
   // === CURP: primero por casillas (robusto), luego regex laxa como respaldo ===
-  result.curp = extractBoxedCode(lines, 18, 18, (c) => CURP_RE.test(c));
+  result.curp = extractBoxedCode(empLines, 18, 18, (c) => CURP_RE.test(c));
   if (!result.curp) {
     const curpRegex = /([A-Z\s]{4,8}\d[\d\s]{5,10}[A-Z\s]{6,10}\d[\dA-Z\s])/i;
-    const curpMatch = cleanText.match(curpRegex);
+    const curpMatch = empText.match(curpRegex);
     if (curpMatch) {
       const candidate = curpMatch[1].replace(/\s+/g, '').toUpperCase();
       if (candidate.length === 18) result.curp = candidate;
     }
   }
 
-  // === RFC: casillas primero, luego regex laxa ===
-  result.rfc = extractBoxedCode(lines, 12, 13, (c) => RFC_RE.test(c) || /^[A-Z]{3,4}\d{6}[A-Z0-9]{2,3}$/.test(c));
+  // === RFC: casillas primero, luego regex laxa (acotado a la sección del
+  //     trabajador — el RFC de la empresa NO debe terminar en este campo).
+  //     También excluimos la línea de la que salió el CURP: su corrida de
+  //     casillas es más larga que un RFC y comparte estructura (letras+6
+  //     dígitos+alfanumérico), así que un "recorte" de esa misma corrida
+  //     puede colar como falso positivo de RFC si no se descarta. La
+  //     mayoría de los DC3 oficiales, de hecho, NO tienen un campo de RFC
+  //     del trabajador — solo CURP — así que es normal y correcto que
+  //     result.rfc quede en null en ese caso. ===
+  const curpLineIdx = result.curp
+    ? empLines.findIndex(l => longestBoxedRun(l).toUpperCase().includes(result.curp))
+    : -1;
+  const rfcSearchLines = curpLineIdx >= 0
+    ? empLines.filter((_, idx) => idx !== curpLineIdx)
+    : empLines;
+  result.rfc = extractBoxedCode(rfcSearchLines, 12, 13, (c) => RFC_RE.test(c) || /^[A-Z]{3,4}\d{6}[A-Z0-9]{2,3}$/.test(c));
   if (!result.rfc) {
     const rfcRegex = /([A-Z\s]{3,5}\d[\d\s]{5,8}[A-Z\d\s]{3,5})/i;
-    const rfcMatch = cleanText.match(rfcRegex);
+    const rfcMatch = empText.match(rfcRegex);
     if (rfcMatch) {
       const candidate = rfcMatch[1].replace(/\s+/g, '').toUpperCase();
-      if (candidate.length >= 12 && candidate.length <= 13) result.rfc = candidate;
+      if (candidate.length >= 12 && candidate.length <= 13 && candidate !== result.curp) {
+        result.rfc = candidate;
+      }
     }
   }
 
   // === NOMBRE: heurísticas por línea (DC3 / Diploma / genérico) ===
   result.name = extractNameFromLines(lines);
+
+  // === PUESTO/CARGO (solo aparece en el DC3) ===
+  result.jobTitle = extractJobTitleFromLines(lines);
 
   // === Fechas ===
   // Los DC3/Diplomas de este formato NO traen una fecha de "vigencia/expira"
@@ -317,6 +434,16 @@ export function parseDocumentData(text) {
     while ((m = ymdColumnRegex.exec(cleanText)) !== null) {
       allDates.push(`${m[1]}-${m[2]}-${m[3]}`);
     }
+  }
+
+  // Formato STPS DC3 con casillas de UN DÍGITO por celda, p.ej.
+  // "2 0 2 6 0 7 2 2 a 2 0 2 6 0 7 2 2" (Periodo de ejecución: De ... a ...).
+  // Este es el formato REAL más común del DC3 oficial (cada dígito en su
+  // propia celda, igual que el CURP/RFC) — sin esto, la fecha de ejecución
+  // del curso nunca se detecta y la vigencia queda vacía.
+  const boxedRange = extractBoxedDateRange(lines);
+  if (boxedRange) {
+    allDates.push(boxedRange.start, boxedRange.end);
   }
 
   // Formato español largo, p.ej. "22 DE JULIO DEL 2026" (usado en diplomas)

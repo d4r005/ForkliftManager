@@ -202,6 +202,10 @@ export default function MasterPdfImport({ onDone, onClose }) {
         if (pageDocType === 'dc3') {
           updateParams.p_dc3_pdf_path = fileName;
           if (p.extracted.vigencia) updateParams.p_dc3_vigencia = p.extracted.vigencia;
+          // El CURP y el puesto solo aparecen en el DC3 (el diploma no los trae)
+          if (p.extracted.curp) updateParams.p_curp = p.extracted.curp;
+          if (p.extracted.jobTitle) updateParams.p_job_title = p.extracted.jobTitle;
+          if (p.extracted.rfc) updateParams.p_rfc = p.extracted.rfc;
         } else {
           updateParams.p_diploma_pdf_path = fileName;
           if (p.extracted.vigencia) updateParams.p_diploma_vigencia = p.extracted.vigencia;
@@ -336,6 +340,7 @@ export default function MasterPdfImport({ onDone, onClose }) {
                             <button className="btn-link" onClick={() => setShowRawText(p.index)} title="Ver texto extraído">👁️</button>
                           </div>
                           <div style={{ color: 'var(--text-secondary)' }}>CURP: {p.extracted.curp || '—'}</div>
+                          {p.extracted.jobTitle && <div style={{ color: 'var(--text-secondary)' }}>Puesto: {p.extracted.jobTitle}</div>}
                           <div style={{ color: 'var(--text-secondary)' }}>Vig: {p.extracted.vigencia || '—'}</div>
                         </td>
                         <td>
