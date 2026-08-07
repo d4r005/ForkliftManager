@@ -4,6 +4,7 @@ import { useLang } from '../i18n/LanguageContext.jsx';
 import { supabase } from '../lib/supabase.js';
 import { extractPdfText, parseDocumentData } from '../utils/pdfExtract.js';
 import ExcelImport from './ExcelImport.jsx';
+import MasterPdfImport from './MasterPdfImport.jsx';
 
 export default function EmployeeRecords() {
   const { user } = useAuth();
@@ -15,6 +16,7 @@ export default function EmployeeRecords() {
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [showEditForm, setShowEditForm] = useState(false);
   const [showExcelImport, setShowExcelImport] = useState(false);
+  const [showMasterPdfImport, setShowMasterPdfImport] = useState(false);
   const [pdfViewer, setPdfViewer] = useState(null);
   const [alert, setAlert] = useState(null);
   const [extractedData, setExtractedData] = useState(null);
@@ -240,6 +242,16 @@ export default function EmployeeRecords() {
       <ExcelImport
         onDone={() => loadExpedientes()}
         onClose={() => setShowExcelImport(false)}
+      />
+    );
+  }
+
+  // Master PDF Import modal
+  if (showMasterPdfImport) {
+    return (
+      <MasterPdfImport
+        onDone={() => loadExpedientes()}
+        onClose={() => setShowMasterPdfImport(false)}
       />
     );
   }
@@ -512,9 +524,14 @@ export default function EmployeeRecords() {
         <div className="section-header">
           <h2>📁 {t('expTitle')}</h2>
           {isAdmin && (
-            <button className="btn btn-primary" onClick={() => setShowExcelImport(true)}>
-              📊 {t('impTitle')}
-            </button>
+            <div className="section-header-actions">
+              <button className="btn btn-secondary" onClick={() => setShowMasterPdfImport(true)}>
+                📄 {t('expMasterPdfTitle')}
+              </button>
+              <button className="btn btn-primary" onClick={() => setShowExcelImport(true)}>
+                📊 {t('impTitle')}
+              </button>
+            </div>
           )}
         </div>
 

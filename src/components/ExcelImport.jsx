@@ -8,6 +8,8 @@ export default function ExcelImport({ onDone, onClose }) {
   const { user } = useAuth();
   const { t } = useLang();
   const [preview, setPreview] = useState([]);
+  const [reverseNames, setReverseNames] = useState(false);
+  const [nameWords, setNameWords] = useState(1);
   const [importing, setImporting] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
@@ -110,18 +112,30 @@ export default function ExcelImport({ onDone, onClose }) {
     setError(null);
     try {
       // Transformar a formato que espera el RPC
-      const employees = preview.map(r => ({
-        employee_number: r.employee_number,
-        name: r.name,
-        curp: r.curp || null,
-        rfc: r.rfc || null,
-        nss: r.nss || null,
-        job_title: r.job_title || null,
-        dc3_vigencia: r.dc3_vigencia || null,
-        diploma_vigencia: r.diploma_vigencia || null,
-        password: r.password || 'temporal123',
-        role: r.role === 'admin' ? 'admin' : 'user',
-      }));
+      const employees = preview.map(r => {
+        let finalName = r.name;
+        if (reverseNames) {
+          const parts = r.name.split(/\s+/).filter(Boolean);
+          if (parts.length > nameWords) {
+            const firstNameParts = parts.slice(-nameWords);
+            const lastNameParts = parts.slice(0, -nameWords);
+            finalName = [...firstNameParts, ...lastNameParts].join(' ');
+          }
+        }
+
+        return {
+          employee_number: r.employee_number,
+          name: finalName,
+          curp: r.curp || null,
+          rfc: r.rfc || null,
+          nss: r.nss || null,
+          job_title: r.job_title || null,
+          dc3_vigencia: r.dc3_vigencia || null,
+          diploma_vigencia: r.diploma_vigencia || null,
+          password: r.password || 'temporal123',
+          role: r.role === 'admin' ? 'admin' : 'user',
+        };
+      });
 
       const { data, error: rpcError } = await supabase.rpc('bulk_import_employees', {
         p_admin_employee_number: user.employeeNumber,
@@ -190,6 +204,34 @@ export default function ExcelImport({ onDone, onClose }) {
               <div className="import-preview-info">
                 <strong>{preview.length}</strong> {t('impRowsFound')}
               </div>
+
+              <div className="import-options" style={{ marginBottom: '16px', background: '#f8f9fa', padding: '12px', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                  <input
+                    type="checkbox"
+                    id="reverseNames"
+                    checked={reverseNames}
+                    onChange={e => setReverseNames(e.target.checked)}
+                  />
+                  <label htmlFor="reverseNames" style={{ fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>
+                    {t('impReverseNames')}
+                  </label>
+                </div>
+                {reverseNames && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '24px' }}>
+                    <label style={{ fontSize: '13px' }}>{t('impNameWords')}:</label>
+                    <select
+                      value={nameWords}
+                      onChange={e => setNameWords(parseInt(e.target.value))}
+                      style={{ padding: '2px 8px', borderRadius: '4px' }}
+                    >
+                      <option value={1}>1</option>
+                      <option value={2}>2</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
               <div className="import-table-wrap">
                 <table className="import-table">
                   <thead>
@@ -204,17 +246,30 @@ export default function ExcelImport({ onDone, onClose }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {preview.map((r, i) => (
-                      <tr key={i}>
-                        <td>{r.row}</td>
-                        <td><strong>{r.employee_number}</strong></td>
-                        <td>{r.name}</td>
-                        <td className="cell-mono">{r.curp || '—'}</td>
-                        <td className="cell-mono">{r.rfc || '—'}</td>
-                        <td className="cell-mono">{r.dc3_vigencia || '—'}</td>
-                        <td className="cell-mono">{r.diploma_vigencia || '—'}</td>
-                      </tr>
-                    ))}
+                    {preview.map((r, i) => {
+                      let displayName = r.name;
+                      if (reverseNames) {
+                        const parts = r.name.split(/\s+/).filter(Boolean);
+                        if (parts.length > nameWords) {
+                          const firstNameParts = parts.slice(-nameWords);
+                          const lastNameParts = parts.slice(0, -nameWords);
+                          displayName = [...firstNameParts, ...lastNameParts].join(' ');
+                        }
+                      }
+                      return (
+                        <tr key={i}>
+                          <td>{r.row}</td>
+                          <td><strong>{r.employee_number}</strong></td>
+                          <td style={{ color: reverseNames ? 'var(--primary)' : 'inherit' }}>
+                            {displayName}
+                          </td>
+                          <td className="cell-mono">{r.curp || '—'}</td>
+                          <td className="cell-mono">{r.rfc || '—'}</td>
+                          <td className="cell-mono">{r.dc3_vigencia || '—'}</td>
+                          <td className="cell-mono">{r.diploma_vigencia || '—'}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
