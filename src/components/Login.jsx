@@ -4,49 +4,34 @@ import { useLang } from '../i18n/LanguageContext.jsx';
 import { languages } from '../data/checklistItems.js';
 
 export default function Login() {
-  const { signIn, signUp, resetPassword, error, setError } = useAuth();
+  const { signIn, error, setError } = useAuth();
   const { lang, setLang, t } = useLang();
-  const [mode, setMode] = useState('signin'); // 'signin' | 'signup' | 'reset'
-  const [email, setEmail] = useState('');
+  const [employeeNumber, setEmployeeNumber] = useState('');
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { setError(null); setLocalError(''); }, [mode]);
+  useEffect(() => { setError(null); setLocalError(''); }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLocalError('');
-    setSuccessMsg('');
 
-    if (!email.trim() || !password.trim() && mode !== 'reset') {
+    if (!employeeNumber.trim() || !password.trim()) {
       setLocalError(t('authFillFields'));
       return;
     }
 
     setLoading(true);
-    try {
-      if (mode === 'signin') {
-        const ok = await signIn(email.trim(), password);
-        if (!ok) setLocalError(error || t('authSignInError'));
-      } else if (mode === 'signup') {
-        const result = await signUp(email.trim(), password);
-        if (result.success && result.needsConfirmation) {
-          setSuccessMsg(t('authCheckEmail'));
-        } else if (!result.success) {
-          setLocalError(error || t('authSignUpError'));
-        }
-      } else if (mode === 'reset') {
-        const ok = await resetPassword(email.trim());
-        if (ok) setSuccessMsg(t('authResetSent'));
-        else setLocalError(t('authResetError'));
-      }
-    } catch (err) {
-      setLocalError(err.message);
-    } finally {
-      setLoading(false);
+    const ok = await signIn(employeeNumber.trim(), password);
+    if (!ok) {
+      const msg = error || t('authSignInError');
+      // Translate error codes
+      if (msg === 'user_not_found') setLocalError(t('authUserNotFound'));
+      else if (msg === 'invalid_password') setLocalError(t('authInvalidPassword'));
+      else setLocalError(msg);
     }
+    setLoading(false);
   };
 
   return (
@@ -76,81 +61,44 @@ export default function Login() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="login-form">
-          <h2>
-            {mode === 'signin' && `🔐 ${t('authSignIn')}`}
-            {mode === 'signup' && `📝 ${t('authSignUp')}`}
-            {mode === 'reset' && `🔑 ${t('authResetPassword')}`}
-          </h2>
+          <h2>🔐 {t('authSignIn')}</h2>
 
-          {(localError || error) && (
-            <div className="alert alert-error">⚠️ {localError || error}</div>
-          )}
-
-          {successMsg && (
-            <div className="alert alert-success">✅ {successMsg}</div>
+          {localError && (
+            <div className="alert alert-error">⚠️ {localError}</div>
           )}
 
           <div className="form-field">
-            <label>{t('authEmail')}</label>
+            <label>{t('authEmployeeNumber')}</label>
             <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="email@ejemplo.com"
-              autoComplete="email"
+              type="text"
+              value={employeeNumber}
+              onChange={e => setEmployeeNumber(e.target.value)}
+              placeholder={t('authEmployeePlaceholder')}
+              autoComplete="username"
               required
             />
           </div>
 
-          {mode !== 'reset' && (
-            <div className="form-field">
-              <label>{t('authPassword')}</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-                required
-              />
-            </div>
-          )}
+          <div className="form-field">
+            <label>{t('authPassword')}</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              required
+            />
+          </div>
 
           <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
-            {loading ? '...' : (
-              mode === 'signin' ? t('authSignIn') :
-              mode === 'signup' ? t('authSignUp') :
-              t('authSendReset')
-            )}
+            {loading ? '...' : t('authSignIn')}
           </button>
         </form>
 
-        {/* Mode switcher */}
-        <div className="login-switch">
-          {mode === 'signin' && (
-            <>
-              <button className="link-btn" onClick={() => setMode('signup')}>
-                {t('authNoAccount')}
-              </button>
-              <button className="link-btn" onClick={() => setMode('reset')}>
-                {t('authForgotPassword')}
-              </button>
-            </>
-          )}
-          {mode === 'signup' && (
-            <button className="link-btn" onClick={() => setMode('signin')}>
-              {t('authHaveAccount')}
-            </button>
-          )}
-          {mode === 'reset' && (
-            <button className="link-btn" onClick={() => setMode('signin')}>
-              {t('back')}
-            </button>
-          )}
-        </div>
-
         <div className="login-footer">
           <p>{t('company')}</p>
+          <p className="footer-sub">MontaControl v2.0 — ES · EN · 中文 · Tiếng Việt</p>
         </div>
       </div>
     </div>

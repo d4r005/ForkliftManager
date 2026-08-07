@@ -10,8 +10,7 @@ export default function Header({ view, setView, checklistCount }) {
     if (confirm(t('authSignOutConfirm'))) signOut();
   };
 
-  const userEmail = user?.email || '';
-  const userInitial = userEmail[0]?.toUpperCase() || 'U';
+  const isAdmin = user?.role === 'admin';
 
   return (
     <header className="app-header">
@@ -39,10 +38,15 @@ export default function Header({ view, setView, checklistCount }) {
             ))}
           </div>
 
-          {/* User menu */}
+          {/* User info */}
           <div className="user-menu">
-            <div className="user-avatar" title={userEmail}>{userInitial}</div>
-            <span className="user-email">{userEmail}</span>
+            <div className="user-avatar" title={user?.name}>
+              {isAdmin ? '🛡️' : '👤'}
+            </div>
+            <div className="user-info-text">
+              <span className="user-name">{user?.name || user?.employeeNumber}</span>
+              <span className="user-emp">#{user?.employeeNumber}</span>
+            </div>
             <button className="icon-btn" onClick={handleSignOut} title={t('authSignOut')}>
               🚪
             </button>
@@ -76,6 +80,14 @@ export default function Header({ view, setView, checklistCount }) {
         >
           🚜 {t('forklifts')}
         </button>
+        {isAdmin && (
+          <button
+            className={`nav-btn ${view === 'users' ? 'active' : ''}`}
+            onClick={() => setView('users')}
+          >
+            👥 {t('userManagement')}
+          </button>
+        )}
       </nav>
     </header>
   );

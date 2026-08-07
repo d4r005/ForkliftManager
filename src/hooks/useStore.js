@@ -7,7 +7,6 @@ export function useStore(user) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Cargar datos cuando hay usuario
   useEffect(() => {
     if (!user) {
       setChecklists([]);
@@ -19,18 +18,24 @@ export function useStore(user) {
   }, [user]);
 
   const loadData = async () => {
+    if (!user) return;
     setLoading(true);
     setError(null);
     try {
       const [checklistsRes, forkliftsRes] = await Promise.all([
-        supabase.from('checklists').select('*').order('created_at', { ascending: false }),
-        supabase.from('forklifts').select('*').order('created_at', { ascending: true }),
+        supabase.from('checklists')
+          .select('*')
+          .eq('employee_number', user.employeeNumber)
+          .order('created_at', { ascending: false }),
+        supabase.from('forklifts')
+          .select('*')
+          .eq('employee_number', user.employeeNumber)
+          .order('created_at', { ascending: true }),
       ]);
 
       if (checklistsRes.error) throw checklistsRes.error;
       if (forkliftsRes.error) throw forkliftsRes.error;
 
-      // Mapear de snake_case (DB) a camelCase (app)
       setChecklists((checklistsRes.data || []).map(mapChecklistFromDB));
       setForklifts((forkliftsRes.data || []).map(mapForkliftFromDB));
     } catch (err) {
@@ -42,8 +47,9 @@ export function useStore(user) {
   };
 
   const addChecklist = useCallback(async (checklist) => {
+    if (!user) throw new Error('no_session');
     try {
-      const { data, error } = await supabase
+      const { data, error: dbError } = await supabase
         .from('checklists')
         .insert({
           forklift_id: checklist.forkliftId,
@@ -54,11 +60,12 @@ export function useStore(user) {
           day: checklist.day,
           items: checklist.items,
           observations: checklist.observations || '',
+          employee_number: user.employeeNumber,
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (dbError) throw dbError;
       const mapped = mapChecklistFromDB(data);
       setChecklists(prev => [mapped, ...prev]);
       return mapped;
@@ -67,12 +74,10 @@ export function useStore(user) {
       setError(err.message);
       throw err;
     }
-  }, []);
+  }, [user]);
 
   const updateChecklist = useCallback(async (id, updates) => {
     try {
-      // id viene como string (Date.now() del localStorage) o UUID de Supabase
-      // Buscar por el UUID real
       const dbUpdates = {};
       if (updates.forkliftId !== undefined) dbUpdates.forklift_id = updates.forkliftId;
       if (updates.operatorName !== undefined) dbUpdates.operator_name = updates.operatorName;
@@ -83,14 +88,15 @@ export function useStore(user) {
       if (updates.items !== undefined) dbUpdates.items = updates.items;
       if (updates.observations !== undefined) dbUpdates.observations = updates.observations;
 
-      const { data, error } = await supabase
+      const { data, error: dbError } = await supabase
         .from('checklists')
         .update(dbUpdates)
         .eq('id', id)
+        .eq('employee_number', user?.employeeNumber)
         .select()
         .single();
 
-      if (error) throw error;
+      if (dbError) throw dbError;
       const mapped = mapChecklistFromDB(data);
       setChecklists(prev => prev.map(c => (c.id === id ? mapped : c)));
       return mapped;
@@ -99,32 +105,38 @@ export function useStore(user) {
       setError(err.message);
       throw err;
     }
-  }, []);
+  }, [user]);
 
   const deleteChecklist = useCallback(async (id) => {
     try {
-      const { error } = await supabase.from('checklists').delete().eq('id', id);
-      if (error) throw error;
+      const { error: dbError } = await supabase
+        .from('checklists')
+        .delete()
+        .eq('id', id)
+        .eq('employee_number', user?.employeeNumber);
+      if (dbError) throw dbError;
       setChecklists(prev => prev.filter(c => c.id !== id));
     } catch (err) {
       console.error('Error deleting checklist:', err);
       setError(err.message);
       throw err;
     }
-  }, []);
+  }, [user]);
 
   const addForklift = useCallback(async (forklift) => {
+    if (!user) throw new Error('no_session');
     try {
-      const { data, error } = await supabase
+      const { data, error: dbError } = await supabase
         .from('forklifts')
         .insert({
           id_code: forklift.id,
           name: forklift.name || '',
+          employee_number: user.employeeNumber,
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (dbError) throw dbError;
       const mapped = mapForkliftFromDB(data);
       setForklifts(prev => [...prev, mapped]);
       return mapped;
@@ -133,19 +145,23 @@ export function useStore(user) {
       setError(err.message);
       throw err;
     }
-  }, []);
+  }, [user]);
 
   const deleteForklift = useCallback(async (id) => {
     try {
-      const { error } = await supabase.from('forklifts').delete().eq('id', id);
-      if (error) throw error;
+      const { error: dbError } = await supabase
+        .from('forklifts')
+        .delete()
+        .eq('id', id)
+        .eq('employee_number', user?.employeeNumber);
+      if (dbError) throw dbError;
       setForklifts(prev => prev.filter(f => f.id !== id));
     } catch (err) {
       console.error('Error deleting forklift:', err);
       setError(err.message);
       throw err;
     }
-  }, []);
+  }, [user]);
 
   return {
     data: { checklists, forklifts },
@@ -160,7 +176,6 @@ export function useStore(user) {
   };
 }
 
-// Mapeadores DB ↔ App
 function mapChecklistFromDB(row) {
   return {
     id: row.id,

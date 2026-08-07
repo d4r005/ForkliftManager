@@ -7,6 +7,7 @@ import Dashboard from './components/Dashboard.jsx';
 import ChecklistForm from './components/ChecklistForm.jsx';
 import SavedChecklists from './components/SavedChecklists.jsx';
 import ForkliftManager from './components/ForkliftManager.jsx';
+import UserManager from './components/UserManager.jsx';
 import Login from './components/Login.jsx';
 import { exportChecklistToExcel } from './utils/exportExcel.js';
 
@@ -28,7 +29,7 @@ function AppContent() {
       setView('list');
     } catch (err) {
       console.error('Save error:', err);
-      alert(t('authSignInError') + ': ' + err.message);
+      alert(err.message);
     }
   };
 
@@ -46,7 +47,6 @@ function AppContent() {
     exportChecklistToExcel(c, lang);
   };
 
-  // Mostrar loading mientras se verifica la sesión
   if (authLoading) {
     return (
       <div className="loading-screen">
@@ -56,12 +56,10 @@ function AppContent() {
     );
   }
 
-  // Mostrar login si no hay sesión
   if (!user) {
     return <Login />;
   }
 
-  // Mostrar loading de datos
   if (store.loading && store.data.checklists.length === 0 && store.data.forklifts.length === 0) {
     return (
       <div className="loading-screen">
@@ -119,6 +117,10 @@ function AppContent() {
             onAdd={store.addForklift}
             onDelete={store.deleteForklift}
           />
+        )}
+
+        {view === 'users' && user.role === 'admin' && (
+          <UserManager />
         )}
       </main>
 
