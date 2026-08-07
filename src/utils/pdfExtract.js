@@ -421,3 +421,109 @@ function normalizeDate(dateStr) {
 
   return dateStr;
 }
+
+/**
+ * Extrae la fotografía embebida en una página de un DC3.
+ *
+ * Los DC3 oficiales de la STPS traen una zona marcada "FOTOGRAFÍA" en la
+ * esquina superior derecha de la primera hoja, donde el trabajador pega una
+ * foto tamaño credencial. Esta función:
+ *   1) Renderiza la página completa a un canvas de alta resolución.
+ *   2) Busca en el texto la palabra "FOTOGRAF" para localizar la zona.
+ *   3) Recorta la región debajo/del lado de esa etiqueta.
+ *   4) Devuelve un Blob JPEG listo para subir a Storage.
+ *
+ * Si no encuentra la zona o no puede renderizar, devuelve null (no falla).
+ *
+ * @param {File|ArrayBuffer} file - El PDF completo
+ * @param {number} pageIndex - Índice de la página (0-based)
+ * @returns {Promise<Blob|null>} - Blob JPEG de la foto, o null
+ */
+export async function extractPhotoFromPdfPage(file, pageIndex) {
+  try {
+    const arrayBuffer = file instanceof ArrayBuffer ? file : await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const page = await pdf.getPage(pageIndex + 1);
+
+    // Renderizar a alta resolución (scale 2 = ~144 DPI)
+    const viewport = page.getViewport({ scale: 2 });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    // Buscar la posición de "FOTOGRAF" en el texto de la página
+    const content = await page.getTextContent();
+    const photoItem = content.items.find(item =>
+      /FOTOGRAF/i.test(item.str)
+    );
+
+    let x, y, w, h;
+
+    if (photoItem) {
+      // Coordenadas del texto en el sistema del PDF (origin abajo-izq)
+      const tx = photoItem.transform[4];
+      const ty = photoItem.transform[5];
+      // Convertir a coordenadas de canvas (origin arriba-izq, escala 2)
+      const cx = tx * 2;
+      const cy = canvas.height - ty * 2;
+
+      // La foto suele estar en un recuadro al lado o debajo de "FOTOGRAFÍA"
+      // Típico del DC3: recuadro ~3cm x 3.5cm ( credential size)
+      // En píxeles a escala 2 (~144 DPI): 3cm ≈ 170px, 3.5cm ≈ 200px
+      w = 200;
+      h = 230;
+
+      // La etiqueta "FOTOGRAFÍA" suele estar arriba del recuadro o a un lado.
+      // Intentamos: si hay texto a la derecha de la etiqueta, la foto está abajo.
+      // Si no, la foto está a la derecha.
+      const hasTextRight = content.items.some(item =>
+        item.transform[4] > tx + 100 &&
+        Math.abs(item.transform[5] - ty) < 50 &&
+        item.str.trim().length > 0
+      );
+
+      if (hasTextRight) {
+        // Foto debajo de la etiqueta
+        x = cx - 10;
+        y = cy;
+      } else {
+        // Foto a la derecha de la etiqueta
+        x = cx + 80;
+        y = cy - 30;
+      }
+    } else {
+      // No se encontró "FOTOGRAFÍA" — usar heurística: esquina superior derecha
+      // del DC3 (donde suele estar la foto en formato oficial STPS)
+      w = 200;
+      h = 230;
+      x = canvas.width - w - 80;
+      y = 60;
+    }
+
+    // Ajustar límites al canvas
+    x = Math.max(0, Math.min(x, canvas.width - w));
+    y = Math.max(0, Math.min(y, canvas.height - h));
+
+    // Recortar
+    const photoCanvas = document.createElement('canvas');
+    photoCanvas.width = w;
+    photoCanvas.height = h;
+    const photoCtx = photoCanvas.getContext('2d');
+    photoCtx.drawImage(canvas, x, y, w, h, 0, 0, w, h);
+
+    // Convertir a JPEG
+    return new Promise((resolve) => {
+      photoCanvas.toBlob(
+        (blob) => resolve(blob),
+        'image/jpeg',
+        0.85
+      );
+    });
+  } catch (err) {
+    console.warn('extractPhotoFromPdfPage: no se pudo extraer foto:', err);
+    return null;
+  }
+}

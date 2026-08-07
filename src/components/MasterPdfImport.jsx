@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../i18n/LanguageContext.jsx';
 import { supabase } from '../lib/supabase.js';
-import { extractPdfPagesText, parseDocumentData, nameWordOverlapRatio } from '../utils/pdfExtract.js';
+import { extractPdfPagesText, parseDocumentData, nameWordOverlapRatio, extractPhotoFromPdfPage } from '../utils/pdfExtract.js';
 import { extractPdfPage } from '../utils/pdfSplit.js';
 
 export default function MasterPdfImport({ onDone, onClose }) {
@@ -159,7 +159,27 @@ export default function MasterPdfImport({ onDone, onClose }) {
 
         if (uploadError) throw uploadError;
 
-        // 3. Actualizar base de datos.
+        // 3. Si es DC3, intentar extraer la fotografía embebida
+        let photoPath = null;
+        if (pageDocType === 'dc3') {
+          try {
+            const photoBlob = await extractPhotoFromPdfPage(file, p.index);
+            if (photoBlob) {
+              const photoName = `${p.selectedEmpId}/photo_master_${Date.now()}_${p.index}.jpg`;
+              const { error: photoUploadError } = await supabase.storage
+                .from('expedientes')
+                .upload(photoName, photoBlob, { contentType: 'image/jpeg', upsert: true });
+              if (!photoUploadError) {
+                photoPath = photoName;
+              }
+            }
+          } catch (e) {
+            // No es crítico — seguir sin foto
+            console.warn('No se pudo extraer foto del DC3 pág', p.index + 1, e);
+          }
+        }
+
+        // 4. Actualizar base de datos.
         // IMPORTANTE: se envían SIEMPRE los 11 parámetros explícitamente
         // (los que no aplican van como null). Si no se envían todos,
         // PostgREST no puede resolver a cuál de las dos versiones de
@@ -175,7 +195,7 @@ export default function MasterPdfImport({ onDone, onClose }) {
           p_job_title: null,
           p_dc3_vigencia: null,
           p_diploma_vigencia: null,
-          p_photo_path: null,
+          p_photo_path: photoPath,
           p_dc3_pdf_path: null,
           p_diploma_pdf_path: null,
         };
