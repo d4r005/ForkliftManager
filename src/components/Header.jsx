@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLang } from '../i18n/LanguageContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { supabase } from '../lib/supabase.js';
 import { languages } from '../data/checklistItems.js';
 
 export default function Header({ view, setView, checklistCount }) {
@@ -43,7 +44,11 @@ export default function Header({ view, setView, checklistCount }) {
           <div className="user-panel-wrap" ref={panelRef}>
             <button className="user-menu" onClick={() => setShowUserPanel(v => !v)}>
               <div className="user-avatar" title={user?.name}>
-                {isAdmin ? '🛡️' : '👤'}
+                {user?.photoPath ? (
+                  <UserAvatarPhoto path={user.photoPath} />
+                ) : (
+                  isAdmin ? '🛡️' : '👤'
+                )}
               </div>
               <div className="user-info-text">
                 <span className="user-name">{user?.name || user?.employeeNumber}</span>
@@ -122,5 +127,30 @@ export default function Header({ view, setView, checklistCount }) {
         )}
       </nav>
     </header>
+  );
+}
+
+function UserAvatarPhoto({ path }) {
+  const [url, setUrl] = useState(null);
+  const [err, setErr] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase.storage.from('expedientes').createSignedUrl(path, 300);
+        if (active) {
+          if (error) setErr(true);
+          else setUrl(data.signedUrl);
+        }
+      } catch { if (active) setErr(true); }
+    })();
+    return () => { active = false; };
+  }, [path]);
+
+  if (err || !url) return <span>👤</span>;
+  return (
+    <img src={url} alt="" className="user-avatar-img"
+      onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()} />
   );
 }

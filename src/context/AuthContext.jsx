@@ -45,6 +45,7 @@ export function AuthProvider({ children }) {
         employeeNumber: userData.employeeNumber,
         name: userData.name,
         role: userData.role,
+        photoPath: userData.photoPath || null,
       };
       setUser(session);
       localStorage.setItem(SESSION_KEY, JSON.stringify(session));
