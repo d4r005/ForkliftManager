@@ -3,6 +3,7 @@ import { useLang } from '../i18n/LanguageContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
 import { languages } from '../data/checklistItems.js';
+import logoMark from '../assets/logo-mark.png';
 
 export default function Header({ view, setView, checklistCount }) {
   const { lang, setLang, t } = useLang();
@@ -32,7 +33,7 @@ export default function Header({ view, setView, checklistCount }) {
     <header className="app-header">
       <div className="header-top">
         <div className="header-brand" onClick={() => setView('dashboard')}>
-          <div className="brand-logo">FM</div>
+          <img src={logoMark} alt="ForkliftManager" className="brand-logo" />
           <div className="brand-text">
             <h1>ForkliftManager</h1>
             <p>{t('appSubtitle')}</p>

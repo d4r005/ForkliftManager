@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../i18n/LanguageContext.jsx';
 import { languages } from '../data/checklistItems.js';
+import logoFull from '../assets/logo-full.png';
 
 export default function Login() {
   const { signIn, error, setError } = useAuth();
@@ -87,8 +88,7 @@ export default function Login() {
 
         {/* Brand */}
         <div className="login-brand">
-          <div className="brand-logo login-logo">FM</div>
-          <h1>ForkliftManager</h1>
+          <img src={logoFull} alt="ForkliftManager" className="login-logo-img" />
           <p>{t('appSubtitle')}</p>
           <p className="login-norm">{t('normRef')}</p>
         </div>

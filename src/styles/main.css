@@ -74,13 +74,9 @@ body {
   width: 44px;
   height: 44px;
   border-radius: var(--radius-sm);
-  background: var(--primary);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 24px;
+  object-fit: contain;
+  background: #fff;
+  padding: 3px;
   flex-shrink: 0;
 }
 
@@ -1299,18 +1295,12 @@ body {
   margin-bottom: 24px;
 }
 
-.login-logo {
-  width: 64px;
-  height: 64px;
-  font-size: 32px;
-  margin: 0 auto 12px;
-  background: linear-gradient(135deg, #1a73e8, #0d47a1);
-  color: #fff;
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
+.login-logo-img {
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+  margin: 0 auto 4px;
+  display: block;
 }
 
 .login-brand h1 {

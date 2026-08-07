@@ -9,7 +9,7 @@
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 1500,
-      "backgroundColor": "#1a73e8",
+      "backgroundColor": "#FFFFFF",
       "showSpinner": false
     },
     "CapacitorHttp": {
