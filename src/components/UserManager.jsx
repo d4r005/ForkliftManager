@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../i18n/LanguageContext.jsx';
+import { supabase } from '../lib/supabase.js';
 
 export default function UserManager() {
   const { user, getUsers, createUser, updateUser, deleteUser, bulkDeleteUsers } = useAuth();
@@ -27,9 +28,33 @@ export default function UserManager() {
   const load = async () => {
     setLoading(true);
     const result = await getUsers();
-    if (result.success) setUsers(result.users || []);
-    else setAlert({ type: 'error', msg: result.error });
+    if (result.success) {
+      const baseUsers = result.users || [];
+      setUsers(baseUsers);
+      // get_users() no incluye photoPath (viene de un RPC distinto). La
+      // enriquecemos en paralelo consultando get_expediente por empleado
+      // (RPC ya público, sin chequeo de admin) para mostrar la foto en la
+      // lista sin tener que tocar el esquema de la función get_users.
+      enrichWithPhotos(baseUsers);
+    } else {
+      setAlert({ type: 'error', msg: result.error });
+    }
     setLoading(false);
+  };
+
+  const enrichWithPhotos = async (baseUsers) => {
+    const results = await Promise.all(
+      baseUsers.map(async (u) => {
+        try {
+          const { data } = await supabase.rpc('get_expediente', { p_employee_number: u.employeeNumber });
+          return { employeeNumber: u.employeeNumber, photoPath: data?.employee?.photoPath || null };
+        } catch {
+          return { employeeNumber: u.employeeNumber, photoPath: null };
+        }
+      })
+    );
+    const photoMap = new Map(results.map(r => [r.employeeNumber, r.photoPath]));
+    setUsers(prev => prev.map(u => ({ ...u, photoPath: photoMap.get(u.employeeNumber) || u.photoPath })));
   };
 
   useEffect(() => { load(); }, []);
@@ -293,7 +318,11 @@ export default function UserManager() {
                     />
                   )}
                   <div className="user-card-avatar">
-                    {u.employeeNumber === user.employeeNumber ? '⭐' : (u.role === 'admin' ? '🛡️' : '👤')}
+                    {u.photoPath ? (
+                      <UserCardPhoto path={u.photoPath} />
+                    ) : (
+                      u.employeeNumber === user.employeeNumber ? '⭐' : (u.role === 'admin' ? '🛡️' : '👤')
+                    )}
                   </div>
                   <div className="user-card-body">
                     <div className="user-card-name">
@@ -331,5 +360,30 @@ export default function UserManager() {
         )}
       </div>
     </div>
+  );
+}
+
+function UserCardPhoto({ path }) {
+  const [url, setUrl] = useState(null);
+  const [err, setErr] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase.storage.from('expedientes').createSignedUrl(path, 300);
+        if (active) {
+          if (error) setErr(true);
+          else setUrl(data.signedUrl);
+        }
+      } catch { if (active) setErr(true); }
+    })();
+    return () => { active = false; };
+  }, [path]);
+
+  if (err || !url) return <span>👤</span>;
+  return (
+    <img src={url} alt="" className="user-card-avatar-img"
+      onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()} />
   );
 }

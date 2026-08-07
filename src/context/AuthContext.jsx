@@ -12,16 +12,42 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     // Restaurar sesión de localStorage
+    let restored = null;
     try {
       const saved = localStorage.getItem(SESSION_KEY);
       if (saved) {
-        const parsed = JSON.parse(saved);
-        setUser(parsed);
+        restored = JSON.parse(saved);
+        setUser(restored);
       }
     } catch (e) {
       console.error('Error restoring session:', e);
     }
     setLoading(false);
+
+    // La sesión guardada puede ser vieja (p.ej. de antes de que se le
+    // cargara la foto al usuario) y localStorage nunca se refresca solo.
+    // Repoblamos photoPath/name en segundo plano con datos frescos del
+    // servidor (get_expediente es público por employeeNumber, sin
+    // necesitar contraseña) para que la foto aparezca sin tener que
+    // volver a iniciar sesión.
+    if (restored?.employeeNumber) {
+      (async () => {
+        try {
+          const { data } = await supabase.rpc('get_expediente', { p_employee_number: restored.employeeNumber });
+          const fresh = data?.employee;
+          if (fresh) {
+            setUser(prev => {
+              if (!prev) return prev;
+              const updated = { ...prev, name: fresh.name || prev.name, photoPath: fresh.photoPath || null };
+              localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+              return updated;
+            });
+          }
+        } catch (e) {
+          // Silencioso: si falla, se queda con los datos cacheados
+        }
+      })();
+    }
   }, []);
 
   const signIn = async (employeeNumber, password) => {
