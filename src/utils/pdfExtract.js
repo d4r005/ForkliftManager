@@ -46,14 +46,19 @@ export function parseDocumentData(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(l => l);
 
   // CURP: 18 caracteres alfanuméricos, formato AAAA######AAAAAA##
-  const curpRegex = /\b([A-Z]{4}\d{6}[A-Z]{6}\d{2})\b/;
+  // Manejar CURP con espacios opcionales (común en formatos DC3)
+  const curpRegex = /([A-Z]\s*[A-Z]\s*[A-Z]\s*[A-Z]\s*\d\s*\d\s*\d\s*\d\s*\d\s*\d\s*[A-Z]\s*[A-Z]\s*[A-Z]\s*[A-Z]\s*[A-Z]\s*[A-Z]\s*\d\s*[\dA-Z])/i;
   const curpMatch = cleanText.match(curpRegex);
-  if (curpMatch) result.curp = curpMatch[1];
+  if (curpMatch) {
+    result.curp = curpMatch[1].replace(/\s+/g, '').toUpperCase();
+  }
 
   // RFC: 12-13 caracteres, formato AAAA######AAA o AAAA######AAA##
-  const rfcRegex = /\b([A-Z]{4}\d{6}[A-Z]{3}\d?)\b/;
+  const rfcRegex = /([A-Z]\s*[A-Z]\s*[A-Z]\s*[A-Z]\s*\d\s*\d\s*\d\s*\d\s*\d\s*\d\s*[A-Z\d]\s*[A-Z\d]\s*[A-Z\d])/i;
   const rfcMatch = cleanText.match(rfcRegex);
-  if (rfcMatch) result.rfc = rfcMatch[1];
+  if (rfcMatch) {
+    result.rfc = rfcMatch[1].replace(/\s+/g, '').toUpperCase();
+  }
 
   // Fechas en formato DD/MM/AAAA, DD-MM-AAAA, o AAAA-MM-DD
   const datePatterns = [

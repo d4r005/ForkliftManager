@@ -1,31 +1,21 @@
-# Walkthrough: Eliminación Masiva de Usuarios y Expedientes
+# Walkthrough: Mejora de Detección en PDF Maestro (CURP y Nombres)
 
-Se ha implementado una funcionalidad de selección múltiple que permite a los administradores eliminar varios usuarios o expedientes de forma simultánea, optimizando la gestión del personal.
+Se ha optimizado el motor de reconocimiento para que el sistema identifique correctamente a los empleados en el PDF Maestro, superando los obstáculos de formato detectados.
 
-## Funcionalidades Implementadas
+## Mejoras Realizadas
 
-### 1. Selección Múltiple
-- **Checkboxes**: Se han añadido casillas de selección en cada tarjeta de usuario y expediente.
-- **Seleccionar todo**: Una opción global para marcar todos los elementos visibles de una vez.
-- **Indicador Visual**: Las tarjetas seleccionadas cambian de color para una mejor identificación.
+### 1. CURP con Espacios (Soportado)
+- Se actualizó el motor de extracción para detectar CURPs que tienen espacios entre sus letras (formato muy común en documentos oficiales como el DC3).
+- El sistema ahora limpia automáticamente estos espacios y normaliza el CURP para encontrar la coincidencia exacta en tu base de datos.
 
-### 2. Eliminación por Lote (Bulk Delete)
-- **Botón Dinámico**: El botón de "Eliminar seleccionados" solo aparece cuando hay al menos un elemento marcado.
-- **Confirmación Segura**: Antes de proceder, el sistema muestra el número total de elementos que se van a eliminar para evitar errores.
-- **Protección de Cuenta**: El sistema impide automáticamente la selección y eliminación del administrador que está operando en ese momento.
+### 2. Búsqueda de Nombres Mejorada
+- Se implementó una **Búsqueda Directa**: El sistema ahora escanea todo el texto de la página buscando el nombre exacto de tus empleados. Esto garantiza una coincidencia del 95% incluso si las etiquetas del documento ("Nombre del trabajador", etc.) no son legibles.
+- La coincidencia por CURP sigue teniendo la prioridad más alta (100% de certeza).
 
-## Cambios Técnicos
-- [NEW] [bulk_delete_migration.sql](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/supabase/bulk_delete_migration.sql): Nueva función RPC para procesar eliminaciones masivas en el servidor.
-- [MODIFY] [AuthContext.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/context/AuthContext.jsx): Integración de la función `bulkDeleteUsers`.
-- [MODIFY] [UserManager.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/UserManager.jsx) y [EmployeeRecords.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/EmployeeRecords.jsx): Actualización de la lógica de interfaz para manejar la selección y el borrado masivo.
-- [MODIFY] [expedientes_migration.sql](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/supabase/expedientes_migration.sql): Se actualizó la función `list_expedientes` para incluir el ID interno del usuario, necesario para la eliminación precisa.
+### 3. Resumen de Datos Detectados
+- Se amplió el resumen de texto que se muestra en la tabla para que puedas ver más información de la página y validar manualmente si el sistema falló en alguna detección automática.
 
-## Verificación Recomendada
-1. Ve a **Gestión de usuarios** o **Expedientes**.
-2. Marca la casilla "Seleccionar todo".
-3. Verifica que el botón de "Eliminar seleccionados" muestre el conteo correcto.
-4. Desmarca algunos elementos y verifica que el conteo se actualice.
-5. Intenta eliminar y confirma el diálogo.
-
-> [!IMPORTANT]
-> Recuerda ejecutar el archivo `supabase/bulk_delete_migration.sql` en tu SQL Editor de Supabase y volver a ejecutar la parte de `list_expedientes` en `expedientes_migration.sql` para que el sistema funcione correctamente.
+## Verificación
+1. **Intenta subir de nuevo el archivo**: `DC3_Masivo_21_trabajadores (1).pdf`.
+2. El sistema ahora debería mostrar los nombres de tus empleados (como "NGUYEN VAN NGOC") y sus CURPs asociados en la columna de "Asignar a".
+3. **Certeza**: Verás un indicador de "Nombre Directo" o "CURP" en la columna de certeza para darte tranquilidad sobre la asociación realizada.

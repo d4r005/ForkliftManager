@@ -27,8 +27,8 @@ export default function MasterPdfImport({ onDone, onClose }) {
     })();
   }, []);
 
-  const findBestMatch = (extractedData) => {
-    if (!extractedData.name && !extractedData.curp) return null;
+  const findBestMatch = (extractedData, fullPageText) => {
+    if (!extractedData.name && !extractedData.curp && !fullPageText) return null;
 
     // 1. Intentar por CURP (exacto)
     if (extractedData.curp) {
@@ -36,7 +36,17 @@ export default function MasterPdfImport({ onDone, onClose }) {
       if (match) return { employee: match, certainty: 100, method: 'CURP' };
     }
 
-    // 2. Intentar por Nombre (fuzzy)
+    // 2. Buscar si el NOMBRE EXACTO de algún empleado aparece en cualquier parte del texto
+    const upperText = fullPageText.toUpperCase();
+    for (const emp of employees) {
+      if (emp.name && emp.name.length > 5) {
+        if (upperText.includes(emp.name.toUpperCase())) {
+          return { employee: emp, certainty: 95, method: 'Nombre Directo' };
+        }
+      }
+    }
+
+    // 3. Intentar por Nombre (fuzzy) if we have extracted something that looks like a name
     if (extractedData.name) {
       const normalizedExtracted = extractedData.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
@@ -44,11 +54,14 @@ export default function MasterPdfImport({ onDone, onClose }) {
       let maxScore = 0;
 
       employees.forEach(emp => {
+        if (!emp.name) return;
         const normalizedEmp = emp.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
         // Split in words
         const wordsExt = normalizedExtracted.split(/\s+/).filter(w => w.length > 2);
         const wordsEmp = normalizedEmp.split(/\s+/).filter(w => w.length > 2);
+
+        if (wordsExt.length === 0 || wordsEmp.length === 0) return;
 
         // Count common words
         const common = wordsExt.filter(w => wordsEmp.includes(w));
@@ -61,7 +74,7 @@ export default function MasterPdfImport({ onDone, onClose }) {
       });
 
       if (maxScore > 0.5) {
-        return { employee: best, certainty: Math.round(maxScore * 100), method: 'Nombre' };
+        return { employee: best, certainty: Math.round(maxScore * 100), method: 'Nombre Difuso' };
       }
     }
 
@@ -87,11 +100,11 @@ export default function MasterPdfImport({ onDone, onClose }) {
         const content = await page.getTextContent();
         const text = content.items.map(item => item.str).join(' ');
         const data = parseDocumentData(text);
-        const match = findBestMatch(data);
+        const match = findBestMatch(data, text);
 
         detectedPages.push({
           index: i - 1,
-          textSummary: text.substring(0, 100) + '...',
+          textSummary: text.substring(0, 150) + '...',
           extracted: data,
           match: match,
           selectedEmpId: match?.employee?.employeeNumber || '',
@@ -101,6 +114,7 @@ export default function MasterPdfImport({ onDone, onClose }) {
 
       setPages(detectedPages);
     } catch (err) {
+      console.error(err);
       setError(err.message);
     }
     setProcessing(false);

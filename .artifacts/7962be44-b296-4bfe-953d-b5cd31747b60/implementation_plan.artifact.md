@@ -1,46 +1,34 @@
-# Plan de Implementación: Eliminación Masiva de Usuarios y Expedientes
+# Plan de Implementación: Mejora de Reconocimiento en PDF Maestro
 
-Este plan detalla los cambios para permitir que un administrador seleccione y elimine múltiples usuarios o expedientes de forma simultánea.
+Este plan aborda la falta de coincidencias al importar el PDF Maestro de DC3, optimizando el motor de extracción de texto para manejar el formato específico de estos documentos (CURP con espacios y nombres sin etiquetas claras).
 
 ## User Review Required
 
-> [!WARNING]
-> La eliminación de un usuario o expediente es permanente y afectará a la tabla `app_users`. Se incluirá una confirmación de seguridad antes de proceder.
-
 > [!IMPORTANT]
-> No se permitirá que el administrador se elimine a sí mismo en una operación masiva para evitar bloqueos accidentales del sistema.
+> **Formato de CURP**: Los documentos DC3 suelen tener el CURP con espacios entre cada letra (ej. `N U X N ...`). Se ha detectado que el sistema actual no reconoce este formato.
+> **Detección por Nombre**: Se implementará una búsqueda directa de los nombres de tus empleados dentro de todo el texto del PDF, lo que aumentará drásticamente la tasa de éxito incluso si el formato del documento varía.
 
 ## Proposed Changes
 
-### Base de Datos (Supabase)
+### 1. Motor de Extracción (Utilidades)
 
-#### [NEW] [bulk_delete_migration.sql](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/supabase/bulk_delete_migration.sql)
-- Crear una nueva función RPC `bulk_delete_users` que reciba un array de UUIDs.
+#### [MODIFY] [pdfExtract.js](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/utils/pdfExtract.js)
+- Actualizar `parseDocumentData` para:
+    - Reconocer CURP con espacios opcionales entre caracteres.
+    - Limpiar automáticamente los espacios al detectar un CURP para normalizarlo.
+    - Capturar bloques de texto en mayúsculas que podrían ser nombres si fallan las etiquetas estándar.
 
-### Frontend
+### 2. Lógica de Asociación (Componente)
 
-#### [MODIFY] [AuthContext.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/context/AuthContext.jsx)
-- Añadir la función `bulkDeleteUsers(userIds)` para invocar el nuevo RPC.
-
-#### [MODIFY] [UserManager.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/UserManager.jsx)
-- Implementar estado para selección múltiple (`selectedIds`).
-- Añadir checkbox en cada tarjeta de usuario.
-- Añadir checkbox de "Seleccionar todo".
-- Añadir botón "Eliminar seleccionados" en la cabecera cuando hay elementos seleccionados.
-
-#### [MODIFY] [EmployeeRecords.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/EmployeeRecords.jsx)
-- Implementar estado para selección múltiple.
-- Añadir checkbox en cada tarjeta de expediente.
-- Añadir checkbox de "Seleccionar todo".
-- Añadir botón "Eliminar seleccionados".
-
-#### [MODIFY] [translations.js](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/i18n/translations.js)
-- Añadir traducciones para: `selectAll`, `deleteSelected`, `confirmBulkDelete`, `itemsSelected`.
+#### [MODIFY] [MasterPdfImport.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/MasterPdfImport.jsx)
+- Mejorar `findBestMatch`:
+    - Antes de usar lógica difusa (fuzzy), buscar si el nombre exacto de algún empleado aparece en cualquier parte del texto extraído de la página.
+    - Dar prioridad máxima a la coincidencia por CURP (ya normalizado).
+- Actualizar la visualización de "Datos detectados" para mostrar el CURP encontrado incluso si tiene espacios.
 
 ## Verification Plan
 
 ### Manual Verification
-1. **Selección**: Verificar que al marcar "Seleccionar todo" se marquen todos los usuarios/expedientes visibles.
-2. **Protección**: Intentar seleccionar al administrador actual y verificar que el sistema lo ignore o impida su eliminación masiva.
-3. **Eliminación**: Seleccionar 3 usuarios de prueba y confirmar la eliminación. Verificar que desaparezcan de ambas vistas (Usuarios y Expedientes).
-4. **Estado**: Verificar que el botón de eliminar masivamente solo aparezca cuando hay al menos un elemento seleccionado.
+1. **Prueba de CURP**: Subir el archivo `DC3_Masivo_21_trabajadores (1).pdf` y verificar que el CURP `NUXN961126HNEGXG04` sea detectado correctamente a pesar de los espacios en el papel.
+2. **Prueba de Nombre**: Verificar que "NGUYEN VAN NGOC" sea asociado automáticamente al empleado correspondiente.
+3. **Revisión de Páginas**: Confirmar que las páginas que contienen datos (anversos) sean marcadas para importar, mientras que las páginas en blanco o reversos puedan ser descartadas manualmente o ignoradas si no hay coincidencia.
