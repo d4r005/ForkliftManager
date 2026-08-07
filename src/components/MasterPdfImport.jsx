@@ -159,13 +159,25 @@ export default function MasterPdfImport({ onDone, onClose }) {
 
         if (uploadError) throw uploadError;
 
-        // 3. Actualizar base de datos — SOLO se envían los campos de ESTE tipo
-        //    de documento; el resto se deja sin especificar para que el backend
-        //    conserve los valores existentes (requiere el fix de update_expediente
-        //    que usa COALESCE — ver supabase/fix_update_expediente_partial.sql).
+        // 3. Actualizar base de datos.
+        // IMPORTANTE: se envían SIEMPRE los 11 parámetros explícitamente
+        // (los que no aplican van como null). Si no se envían todos,
+        // PostgREST no puede resolver a cuál de las dos versiones de
+        // update_expediente (9 params vs 11 params) llamar y responde con
+        // el error PGRST203 "Could not choose the best candidate function".
+        // Mientras se corra el DROP FUNCTION del fix SQL, esto es un workaround.
         const updateParams = {
           p_admin_employee_number: user.employeeNumber,
           p_employee_number: p.selectedEmpId,
+          p_curp: null,
+          p_rfc: null,
+          p_nss: null,
+          p_job_title: null,
+          p_dc3_vigencia: null,
+          p_diploma_vigencia: null,
+          p_photo_path: null,
+          p_dc3_pdf_path: null,
+          p_diploma_pdf_path: null,
         };
         if (pageDocType === 'dc3') {
           updateParams.p_dc3_pdf_path = fileName;
