@@ -1,10 +1,9 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../i18n/LanguageContext.jsx';
 import { supabase } from '../lib/supabase.js';
-import { extractPdfText, parseDocumentData } from '../utils/pdfExtract.js';
+import { extractPdfPagesText, parseDocumentData, nameWordOverlapRatio } from '../utils/pdfExtract.js';
 import { extractPdfPage } from '../utils/pdfSplit.js';
-import * as pdfjsLib from 'pdfjs-dist/build/pdf.min.mjs';
 
 export default function MasterPdfImport({ onDone, onClose }) {
   const { user } = useAuth();
@@ -16,7 +15,10 @@ export default function MasterPdfImport({ onDone, onClose }) {
   const [processing, setProcessing] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState(null);
-  const [docType, setDocType] = useState('dc3'); // dc3 or diploma
+  // 'auto' detecta el tipo de documento por página (permite DC3 + Diploma mezclados
+  // en el mismo PDF). 'dc3' / 'diploma' fuerza ese tipo para TODAS las páginas
+  // (útil si el detector se equivoca en un lote homogéneo).
+  const [docType, setDocType] = useState('auto');
   const [showRawText, setShowRawText] = useState(null); // index of page to show raw text
 
   const fileRef = useRef(null);
@@ -31,28 +33,33 @@ export default function MasterPdfImport({ onDone, onClose }) {
   const findBestMatch = (extractedData, fullPageText) => {
     if (!extractedData.name && !extractedData.curp && !fullPageText) return null;
 
-    // 1. Intentar por CURP (exacto)
+    // 1. Por CURP (exacto) — el método más confiable cuando está disponible
     if (extractedData.curp) {
       const match = employees.find(e => e.curp === extractedData.curp);
       if (match) return { employee: match, certainty: 100, method: 'CURP' };
     }
 
-    // 2. Buscar si el NOMBRE EXACTO de algún empleado aparece en cualquier parte del texto
-    // Normalizar ambos textos (quitar acentos, espacios extra)
-    const normalize = (s) => s?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ' ').trim() || '';
-    const normFullText = normalize(fullPageText);
-
+    // 2. Coincidencia de TODAS las palabras del nombre del empleado en el texto
+    //    completo de la página, sin importar el orden (DC3 usa "Apellidos Nombre",
+    //    los diplomas suelen usar "Nombre Apellidos"). Esto es más robusto que
+    //    buscar una subcadena exacta.
+    let bestOverlap = null;
+    let bestOverlapScore = 0;
     for (const emp of employees) {
-      if (emp.name && emp.name.length > 5) {
-        const normEmpName = normalize(emp.name);
-        if (normFullText.includes(normEmpName)) {
-          return { employee: emp, certainty: 98, method: 'Nombre Directo' };
-        }
+      if (!emp.name || emp.name.length <= 5) continue;
+      const ratio = nameWordOverlapRatio(emp.name, fullPageText);
+      if (ratio > bestOverlapScore) {
+        bestOverlapScore = ratio;
+        bestOverlap = emp;
       }
     }
+    if (bestOverlap && bestOverlapScore >= 0.999) {
+      return { employee: bestOverlap, certainty: 98, method: 'Nombre (todas las palabras)' };
+    }
 
-    // 3. Intentar por Nombre (fuzzy) if we have extracted something that looks like a name
+    // 3. Nombre extraído (fuzzy) contra el nombre del empleado
     if (extractedData.name) {
+      const normalize = (s) => s?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim() || '';
       const normalizedExtracted = normalize(extractedData.name);
 
       let best = null;
@@ -62,13 +69,11 @@ export default function MasterPdfImport({ onDone, onClose }) {
         if (!emp.name) return;
         const normalizedEmp = normalize(emp.name);
 
-        // Split in words
         const wordsExt = normalizedExtracted.split(' ').filter(w => w.length > 2);
         const wordsEmp = normalizedEmp.split(' ').filter(w => w.length > 2);
 
         if (wordsExt.length === 0 || wordsEmp.length === 0) return;
 
-        // Count common words
         const common = wordsExt.filter(w => wordsEmp.includes(w));
         const score = (common.length * 2) / (wordsExt.length + wordsEmp.length);
 
@@ -83,46 +88,45 @@ export default function MasterPdfImport({ onDone, onClose }) {
       }
     }
 
+    // 4. Último recurso: mejor solapamiento parcial de palabras (si alcanza un mínimo)
+    if (bestOverlap && bestOverlapScore >= 0.6) {
+      return { employee: bestOverlap, certainty: Math.round(bestOverlapScore * 90), method: 'Nombre (parcial)' };
+    }
+
     return null;
   };
 
   const handleFile = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const selected = e.target.files[0];
+    if (!selected) return;
 
-    setFile(file);
+    setFile(selected);
     setProcessing(true);
     setError(null);
 
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const totalPages = pdf.numPages;
-      const detectedPages = [];
-
-      for (let i = 1; i <= totalPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-
-        // ORDENACIÓN ESPACIAL (Igual que en pdfExtract para consistencia en debug)
-        const sortedItems = [...content.items].sort((a, b) => {
-          if (Math.abs(a.transform[5] - b.transform[5]) > 5) return b.transform[5] - a.transform[5];
-          return a.transform[4] - b.transform[4];
-        });
-
-        const text = sortedItems.map(item => item.str).join(' ');
+      const pdfPages = await extractPdfPagesText(selected);
+      const detectedPages = pdfPages.map(({ index, text }) => {
         const data = parseDocumentData(text);
         const match = findBestMatch(data, text);
+        // Si el usuario forzó un tipo específico (dc3/diploma) se respeta; en
+        // modo 'auto' se usa el tipo detectado por página (o 'dc3' si no se
+        // pudo determinar, como valor por defecto conservador).
+        const resolvedType = docType === 'auto'
+          ? (data.docType === 'unknown' ? 'dc3' : data.docType)
+          : docType;
 
-        detectedPages.push({
-          index: i - 1,
+        return {
+          index,
           fullText: text,
           extracted: data,
-          match: match,
+          match,
           selectedEmpId: match?.employee?.employeeNumber || '',
-          included: !!match
-        });
-      }
+          included: !!match,
+          detectedType: data.docType,
+          resolvedType,
+        };
+      });
 
       setPages(detectedPages);
     } catch (err) {
@@ -141,9 +145,11 @@ export default function MasterPdfImport({ onDone, onClose }) {
       let successCount = 0;
 
       for (const p of toImport) {
+        const pageDocType = p.resolvedType === 'diploma' ? 'diploma' : 'dc3';
+
         // 1. Extraer página como PDF independiente
         const pageBlob = await extractPdfPage(file, p.index);
-        const fileName = `${p.selectedEmpId}/${docType}_master_${Date.now()}.pdf`;
+        const fileName = `${p.selectedEmpId}/${pageDocType}_master_${Date.now()}_${p.index}.pdf`;
 
         // 2. Subir a Storage
         const { error: uploadError } = await supabase.storage
@@ -152,12 +158,15 @@ export default function MasterPdfImport({ onDone, onClose }) {
 
         if (uploadError) throw uploadError;
 
-        // 3. Actualizar base de datos
+        // 3. Actualizar base de datos — SOLO se envían los campos de ESTE tipo
+        //    de documento; el resto se deja sin especificar para que el backend
+        //    conserve los valores existentes (requiere el fix de update_expediente
+        //    que usa COALESCE — ver supabase/fix_update_expediente_partial.sql).
         const updateParams = {
           p_admin_employee_number: user.employeeNumber,
           p_employee_number: p.selectedEmpId,
         };
-        if (docType === 'dc3') {
+        if (pageDocType === 'dc3') {
           updateParams.p_dc3_pdf_path = fileName;
           if (p.extracted.vigencia) updateParams.p_dc3_vigencia = p.extracted.vigencia;
         } else {
@@ -185,11 +194,14 @@ export default function MasterPdfImport({ onDone, onClose }) {
   const updatePageMatch = (pageIndex, empId) => {
     setPages(prev => prev.map(p => {
       if (p.index === pageIndex) {
-        const emp = employees.find(e => e.employeeNumber === empId);
         return { ...p, selectedEmpId: empId, included: !!empId };
       }
       return p;
     }));
+  };
+
+  const updatePageType = (pageIndex, type) => {
+    setPages(prev => prev.map(p => p.index === pageIndex ? { ...p, resolvedType: type } : p));
   };
 
   const togglePageInclude = (pageIndex) => {
@@ -198,7 +210,7 @@ export default function MasterPdfImport({ onDone, onClose }) {
 
   return (
     <div className="excel-import-overlay">
-      <div className="excel-import-modal" style={{ maxWidth: '1000px' }}>
+      <div className="excel-import-modal" style={{ maxWidth: '1050px' }}>
         <div className="excel-import-header">
           <h2>📄 {t('expMasterPdfTitle')}</h2>
           <button className="btn btn-sm btn-secondary" onClick={onClose}>✕</button>
@@ -216,9 +228,13 @@ export default function MasterPdfImport({ onDone, onClose }) {
               <div className="form-field" style={{ marginBottom: '16px' }}>
                 <label>{t('expDocType')}</label>
                 <select value={docType} onChange={e => setDocType(e.target.value)} style={{ padding: '8px', borderRadius: '8px' }}>
+                  <option value="auto">{t('expDocTypeAuto')}</option>
                   <option value="dc3">{t('expDc3Title')}</option>
                   <option value="diploma">{t('expDiplomaTitle')}</option>
                 </select>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                  {t('expDocTypeAutoHint')}
+                </p>
               </div>
               <button className="btn btn-primary btn-lg" onClick={() => fileRef.current?.click()}>
                 📂 {t('impSelectFile')}
@@ -259,6 +275,7 @@ export default function MasterPdfImport({ onDone, onClose }) {
                       <th style={{ width: '40px' }}></th>
                       <th>Pág</th>
                       <th>Datos detectados</th>
+                      <th>Tipo</th>
                       <th>{t('expAssignTo')}</th>
                       <th>{t('expMatchCertainty')}</th>
                     </tr>
@@ -277,6 +294,16 @@ export default function MasterPdfImport({ onDone, onClose }) {
                           </div>
                           <div style={{ color: 'var(--text-secondary)' }}>CURP: {p.extracted.curp || '—'}</div>
                           <div style={{ color: 'var(--text-secondary)' }}>Vig: {p.extracted.vigencia || '—'}</div>
+                        </td>
+                        <td>
+                          <select
+                            value={p.resolvedType}
+                            onChange={e => updatePageType(p.index, e.target.value)}
+                            style={{ padding: '4px', borderRadius: '4px' }}
+                          >
+                            <option value="dc3">{t('expDc3Title')}</option>
+                            <option value="diploma">{t('expDiplomaTitle')}</option>
+                          </select>
                         </td>
                         <td>
                           <select
