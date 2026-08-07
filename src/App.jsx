@@ -51,7 +51,7 @@ function AppContent() {
   if (authLoading) {
     return (
       <div className="loading-screen">
-        <div className="loading-spinner">M</div>
+        <div className="loading-spinner">FM</div>
         <p>{t('authLoading')}</p>
       </div>
     );
@@ -64,7 +64,7 @@ function AppContent() {
   if (store.loading && store.data.checklists.length === 0 && store.data.forklifts.length === 0) {
     return (
       <div className="loading-screen">
-        <div className="loading-spinner">M</div>
+        <div className="loading-spinner">FM</div>
         <p>{t('authLoading')}</p>
       </div>
     );
@@ -116,6 +116,7 @@ function AppContent() {
           <ForkliftManager
             forklifts={store.data.forklifts}
             onAdd={store.addForklift}
+            onUpdate={store.updateForklift}
             onDelete={store.deleteForklift}
           />
         )}

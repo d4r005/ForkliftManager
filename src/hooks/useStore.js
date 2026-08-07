@@ -132,6 +132,21 @@ export function useStore(user) {
           id_code: forklift.id,
           name: forklift.name || '',
           employee_number: user.employeeNumber,
+          brand: forklift.brand || '',
+          model: forklift.model || '',
+          serial_number: forklift.serialNumber || '',
+          capacity: forklift.capacity || '',
+          capacity_unit: forklift.capacityUnit || '',
+          power_type: forklift.powerType || '',
+          mast_type: forklift.mastType || '',
+          max_lift_height: forklift.maxLiftHeight || '',
+          tire_type: forklift.tireType || '',
+          manufacture_year: forklift.manufactureYear || '',
+          voltage: forklift.voltage || '',
+          weight: forklift.weight || '',
+          photo_path: forklift.photoPath || null,
+          plate_photo_path: forklift.platePhotoPath || null,
+          notes: forklift.notes || '',
         })
         .select()
         .single();
@@ -142,6 +157,46 @@ export function useStore(user) {
       return mapped;
     } catch (err) {
       console.error('Error adding forklift:', err);
+      setError(err.message);
+      throw err;
+    }
+  }, [user]);
+
+  const updateForklift = useCallback(async (id, updates) => {
+    try {
+      const dbUpdates = {};
+      if (updates.idCode !== undefined) dbUpdates.id_code = updates.idCode;
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.brand !== undefined) dbUpdates.brand = updates.brand;
+      if (updates.model !== undefined) dbUpdates.model = updates.model;
+      if (updates.serialNumber !== undefined) dbUpdates.serial_number = updates.serialNumber;
+      if (updates.capacity !== undefined) dbUpdates.capacity = updates.capacity;
+      if (updates.capacityUnit !== undefined) dbUpdates.capacity_unit = updates.capacityUnit;
+      if (updates.powerType !== undefined) dbUpdates.power_type = updates.powerType;
+      if (updates.mastType !== undefined) dbUpdates.mast_type = updates.mastType;
+      if (updates.maxLiftHeight !== undefined) dbUpdates.max_lift_height = updates.maxLiftHeight;
+      if (updates.tireType !== undefined) dbUpdates.tire_type = updates.tireType;
+      if (updates.manufactureYear !== undefined) dbUpdates.manufacture_year = updates.manufactureYear;
+      if (updates.voltage !== undefined) dbUpdates.voltage = updates.voltage;
+      if (updates.weight !== undefined) dbUpdates.weight = updates.weight;
+      if (updates.photoPath !== undefined) dbUpdates.photo_path = updates.photoPath;
+      if (updates.platePhotoPath !== undefined) dbUpdates.plate_photo_path = updates.platePhotoPath;
+      if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+
+      const { data, error: dbError } = await supabase
+        .from('forklifts')
+        .update(dbUpdates)
+        .eq('id', id)
+        .eq('employee_number', user?.employeeNumber)
+        .select()
+        .single();
+
+      if (dbError) throw dbError;
+      const mapped = mapForkliftFromDB(data);
+      setForklifts(prev => prev.map(f => (f.id === id ? mapped : f)));
+      return mapped;
+    } catch (err) {
+      console.error('Error updating forklift:', err);
       setError(err.message);
       throw err;
     }
@@ -172,6 +227,7 @@ export function useStore(user) {
     updateChecklist,
     deleteChecklist,
     addForklift,
+    updateForklift,
     deleteForklift,
   };
 }
@@ -197,6 +253,21 @@ function mapForkliftFromDB(row) {
     id: row.id,
     idCode: row.id_code,
     name: row.name || '',
+    brand: row.brand || '',
+    model: row.model || '',
+    serialNumber: row.serial_number || '',
+    capacity: row.capacity || '',
+    capacityUnit: row.capacity_unit || '',
+    powerType: row.power_type || '',
+    mastType: row.mast_type || '',
+    maxLiftHeight: row.max_lift_height || '',
+    tireType: row.tire_type || '',
+    manufactureYear: row.manufacture_year || '',
+    voltage: row.voltage || '',
+    weight: row.weight || '',
+    photoPath: row.photo_path || null,
+    platePhotoPath: row.plate_photo_path || null,
+    notes: row.notes || '',
     createdAt: row.created_at,
   };
 }

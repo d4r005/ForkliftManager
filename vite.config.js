@@ -8,13 +8,15 @@ export default defineConfig({
     port: 3000
   },
   build: {
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom'],
           supabase: ['@supabase/supabase-js'],
           excel: ['xlsx'],
+          ocr: ['tesseract.js'],
+          pdf: ['pdfjs-dist'],
         }
       }
     }

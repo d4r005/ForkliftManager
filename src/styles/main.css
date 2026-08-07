@@ -2350,3 +2350,301 @@ body {
 .login-card {
   position: relative;
 }
+
+/* ===== FORKLIFT MANAGER — Equipment panel ===== */
+.fk-edit-panel {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.fk-photos-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.fk-photo-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 12px;
+  background: var(--card-bg, #1e1e2e);
+}
+
+.fk-photo-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary, #9aa0a6);
+}
+
+.fk-photo-preview {
+  width: 100%;
+  aspect-ratio: 4/3;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--gray-light, #f8f9fa);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fk-photo-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  color: var(--text-secondary, #bbb);
+  background: var(--gray-light, #f8f9fa);
+  border-radius: 8px;
+}
+
+.fk-photo-placeholder.large {
+  font-size: 5rem;
+}
+
+.fk-photo-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+  user-select: none;
+}
+
+.fk-photo-large {
+  width: 100%;
+  max-height: 300px;
+  object-fit: contain;
+  border-radius: 8px;
+  user-select: none;
+}
+
+.fk-photo-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* OCR progress */
+.fk-ocr-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 10px;
+  font-size: 0.85rem;
+  color: #a5b4fc;
+}
+
+/* Equipment data form */
+.fk-data-form {
+  margin-bottom: 20px;
+}
+
+.fk-data-form h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text, #e8eaed);
+}
+
+.form-field-row {
+  display: flex;
+  gap: 8px;
+}
+
+.form-field-row > div {
+  flex: 1;
+}
+
+.form-field select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 8px;
+  background: var(--card-bg, #1e1e2e);
+  color: var(--text, #e8eaed);
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.form-field select:focus {
+  border-color: var(--primary, #1a73e8);
+}
+
+.form-field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 8px;
+  background: var(--card-bg, #1e1e2e);
+  color: var(--text, #e8eaed);
+  font-size: 0.9rem;
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.form-field textarea:focus {
+  border-color: var(--primary, #1a73e8);
+}
+
+/* === Forklift cards grid === */
+.fk-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.fk-card {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid var(--border, #383848);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--card-bg, #1e1e2e);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.fk-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  transform: translateY(-2px);
+}
+
+.fk-card-photo {
+  width: 80px;
+  flex-shrink: 0;
+  background: var(--gray-light, #2a2a3a);
+  overflow: hidden;
+}
+
+.fk-card-photo .fk-photo-placeholder {
+  font-size: 2rem;
+  border-radius: 0;
+}
+
+.fk-card-photo .fk-photo-thumb {
+  border-radius: 0;
+  height: 100%;
+  min-height: 80px;
+}
+
+.fk-card-body {
+  flex: 1;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.fk-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fk-card-brand {
+  font-size: 0.72rem;
+  color: var(--text-secondary, #9aa0a6);
+  background: var(--muted, #2a2a3a);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.fk-card-name {
+  font-size: 0.82rem;
+  color: var(--text-secondary, #9aa0a6);
+}
+
+.fk-card-model,
+.fk-card-cap,
+.fk-card-power,
+.fk-card-serial {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #9aa0a6);
+}
+
+.fk-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 6px;
+  justify-content: center;
+}
+
+.fk-card-actions .icon-btn {
+  padding: 4px 6px;
+  font-size: 0.8rem;
+}
+
+/* === Forklift detail view === */
+.fk-detail {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.fk-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.fk-detail-photos {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.fk-detail-photo-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fk-detail-photo-block label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary, #9aa0a6);
+}
+
+.fk-detail-data {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fk-detail-notes {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border, #383848);
+}
+
+.fk-detail-notes label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary, #9aa0a6);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.fk-detail-notes p {
+  font-size: 0.85rem;
+  color: var(--text, #e8eaed);
+}
+
+@media (max-width: 600px) {
+  .fk-photos-section,
+  .fk-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
