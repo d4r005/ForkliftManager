@@ -1556,7 +1556,7 @@ body {
 .user-name {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #e8eaed;
+  color: #202124;
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1565,7 +1565,7 @@ body {
 
 .user-emp {
   font-size: 0.75rem;
-  color: #9aa0a6;
+  color: #5f6368;
 }
 
 @media (max-width: 768px) {
