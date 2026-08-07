@@ -33,6 +33,11 @@ export default function EmployeeRecords() {
   const fileInputRef = useRef(null);
   const [uploadTarget, setUploadTarget] = useState(null);
 
+  // Subida rápida de foto desde la pantalla de solo-lectura del expediente,
+  // sin tener que entrar al formulario de edición completo.
+  const quickPhotoInputRef = useRef(null);
+  const [quickUploadingPhoto, setQuickUploadingPhoto] = useState(false);
+
   const showAlert = useCallback((type, msg) => {
     setAlert({ type, msg });
     setTimeout(() => setAlert(null), 4000);
@@ -188,6 +193,52 @@ export default function EmployeeRecords() {
     const pathKey = target === 'photo' ? 'photoPath' :
                    target === 'dc3' ? 'dc3PdfPath' : 'diplomaPdfPath';
     setEditData(prev => ({ ...prev, [pathKey]: null }));
+  };
+
+  // Subida manual de foto desde la vista de expediente (no requiere abrir
+  // el formulario de edición completo).
+  const handleQuickPhotoUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file || !selectedEmp) return;
+
+    const photoTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!photoTypes.includes(file.type)) {
+      showAlert('error', t('expInvalidPhoto'));
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showAlert('error', t('expFileTooLarge'));
+      event.target.value = '';
+      return;
+    }
+
+    setQuickUploadingPhoto(true);
+    try {
+      const ext = file.name.split('.').pop().toLowerCase();
+      const fileName = `${selectedEmp.employeeNumber}/photo_${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase
+        .storage
+        .from('expedientes')
+        .upload(fileName, file, { contentType: file.type, upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data, error } = await supabase.rpc('update_expediente', {
+        p_admin_employee_number: user.employeeNumber,
+        p_employee_number: selectedEmp.employeeNumber,
+        p_photo_path: fileName,
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Error');
+
+      setSelectedEmp(prev => prev ? { ...prev, photoPath: fileName } : prev);
+      setEmployees(prev => prev.map(e => e.employeeNumber === selectedEmp.employeeNumber ? { ...e, photoPath: fileName } : e));
+      showAlert('success', t('expUploadSuccess'));
+    } catch (err) {
+      showAlert('error', err.message);
+    }
+    setQuickUploadingPhoto(false);
+    event.target.value = '';
   };
 
   const toggleSelect = (empNum, e) => {
@@ -475,7 +526,7 @@ export default function EmployeeRecords() {
           <div className="section-header">
             <h2>📁 {t('expTitle')} — {selectedEmp.employeeNumber}</h2>
             <div className="section-header-actions">
-              {isAdmin && <button className="btn btn-primary" onClick={() => handleEdit(selectedEmp)}>✏️ {t('expEdit')}</button>}
+              {isAdmin && <button className="btn btn-primary" onClick={() => handleEdit(selectedEmp)}>✏️ {t('expEditBtn')}</button>}
               <button className="btn btn-secondary" onClick={() => setSelectedEmp(null)}>← {t('back')}</button>
             </div>
           </div>
@@ -486,6 +537,25 @@ export default function EmployeeRecords() {
                 <PhotoThumb path={selectedEmp.photoPath} large />
               ) : (
                 <div className="photo-placeholder large">👤</div>
+              )}
+              {isAdmin && (
+                <>
+                  <input
+                    ref={quickPhotoInputRef}
+                    type="file"
+                    style={{ display: 'none' }}
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleQuickPhotoUpload}
+                  />
+                  <button
+                    className="btn btn-sm btn-primary"
+                    style={{ marginTop: '10px', width: '100%' }}
+                    onClick={() => quickPhotoInputRef.current?.click()}
+                    disabled={quickUploadingPhoto}
+                  >
+                    📷 {quickUploadingPhoto ? t('expUploading') : t('expUploadPhoto')}
+                  </button>
+                </>
               )}
             </div>
             <div className="expediente-view-data">

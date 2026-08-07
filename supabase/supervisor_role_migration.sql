@@ -166,3 +166,57 @@ END;
 
 -- 5) delete_user y bulk_delete_users quedan sin cambios: siguen exigiendo
 --    role = 'admin', así que un supervisor jamás podrá eliminar usuarios.
+
+-- ============================================================================
+-- 6) update_expediente: también admin y supervisor (antes solo admin).
+--    El supervisor tiene acceso completo a expedientes (montacargas,
+--    checklists, expedientes) salvo la gestión de cuentas de usuario.
+-- ============================================================================
+CREATE OR REPLACE FUNCTION update_expediente(
+  p_admin_employee_number TEXT,
+  p_employee_number TEXT,
+  p_curp TEXT DEFAULT NULL,
+  p_rfc TEXT DEFAULT NULL,
+  p_nss TEXT DEFAULT NULL,
+  p_job_title TEXT DEFAULT NULL,
+  p_dc3_vigencia DATE DEFAULT NULL,
+  p_diploma_vigencia DATE DEFAULT NULL,
+  p_photo_path TEXT DEFAULT NULL,
+  p_dc3_pdf_path TEXT DEFAULT NULL,
+  p_diploma_pdf_path TEXT DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_admin app_users%ROWTYPE;
+BEGIN
+  SELECT * INTO v_admin FROM app_users
+  WHERE employee_number = p_admin_employee_number AND is_active = true;
+
+  IF v_admin.id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'admin_not_found');
+  END IF;
+
+  IF v_admin.role NOT IN ('admin', 'supervisor') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'not_authorized');
+  END IF;
+
+  UPDATE app_users SET
+    curp = COALESCE(p_curp, curp),
+    rfc = COALESCE(p_rfc, rfc),
+    nss = COALESCE(p_nss, nss),
+    job_title = COALESCE(p_job_title, job_title),
+    dc3_vigencia = COALESCE(p_dc3_vigencia, dc3_vigencia),
+    diploma_vigencia = COALESCE(p_diploma_vigencia, diploma_vigencia),
+    photo_path = COALESCE(p_photo_path, photo_path),
+    dc3_pdf_path = COALESCE(p_dc3_pdf_path, dc3_pdf_path),
+    diploma_pdf_path = COALESCE(p_diploma_pdf_path, diploma_pdf_path),
+    updated_at = NOW()
+  WHERE employee_number = p_employee_number;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'employee_not_found');
+  END IF;
+
+  RETURN jsonb_build_object('success', true);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
