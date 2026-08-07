@@ -73,6 +73,8 @@ function AppContent() {
   }
 
   const isAdmin = user?.role === 'admin';
+  const isSupervisor = user?.role === 'supervisor';
+  const canManageContent = isAdmin || isSupervisor; // acceso total salvo crear/eliminar usuarios
   const platform = Capacitor.getPlatform();
   const isAndroid = platform === 'android';
 
@@ -88,7 +90,7 @@ function AppContent() {
         view={view}
         setView={(v) => { setView(v); if (v !== 'form') setEditing(null); }}
         checklistCount={store.data.checklists.length}
-        isAdmin={isAdmin}
+        isAdmin={canManageContent}
       />
 
       <main className="app-main">
@@ -133,7 +135,7 @@ function AppContent() {
           />
         )}
 
-        {view === 'users' && user.role === 'admin' && (
+        {view === 'users' && canManageContent && (
           <UserManager />
         )}
 

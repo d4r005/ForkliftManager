@@ -7,7 +7,7 @@ import { extractTextFromImage, parseForkliftPlateData } from '../utils/ocrExtrac
 export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }) {
   const { t } = useLang();
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'supervisor';
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);

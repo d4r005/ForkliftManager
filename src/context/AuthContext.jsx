@@ -105,9 +105,9 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Admin: listar usuarios
+  // Admin y supervisor: listar usuarios
   const getUsers = async () => {
-    if (!user || user.role !== 'admin') return { success: false, error: 'not_authorized' };
+    if (!user || (user.role !== 'admin' && user.role !== 'supervisor')) return { success: false, error: 'not_authorized' };
     try {
       const { data, error: rpcError } = await supabase
         .rpc('get_users', { p_admin_employee_number: user.employeeNumber });
@@ -139,9 +139,11 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Admin: actualizar usuario
+  // Admin y supervisor: actualizar usuario (el backend restringe lo que
+  // puede tocar un supervisor: no puede editar la cuenta del admin ni
+  // otorgar el rol admin)
   const updateUser = async (userId, updates) => {
-    if (!user || user.role !== 'admin') return { success: false, error: 'not_authorized' };
+    if (!user || (user.role !== 'admin' && user.role !== 'supervisor')) return { success: false, error: 'not_authorized' };
     try {
       const { data, error: rpcError } = await supabase
         .rpc('update_user', {

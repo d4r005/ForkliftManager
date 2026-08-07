@@ -1669,6 +1669,14 @@ body {
   border-radius: 6px;
 }
 
+.badge-supervisor {
+  background: #fef7e0;
+  color: #b06000;
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
 .badge-active {
   background: #e6f4ea;
   color: #137333;

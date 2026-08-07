@@ -3,9 +3,18 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../i18n/LanguageContext.jsx';
 import { supabase } from '../lib/supabase.js';
 
+const ROLE_ICONS = { admin: '🛡️', supervisor: '🧭', user: '👤' };
+
 export default function UserManager() {
   const { user, getUsers, createUser, updateUser, deleteUser, bulkDeleteUsers } = useAuth();
   const { t } = useLang();
+
+  // Solo el administrador puede crear/eliminar usuarios. El supervisor tiene
+  // acceso a esta pantalla (puede editar/cambiar contraseñas) pero no puede
+  // crear, eliminar, ni tocar la cuenta del Administrador.
+  const isAdmin = user?.role === 'admin';
+  const isSupervisor = user?.role === 'supervisor';
+
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -64,6 +73,12 @@ export default function UserManager() {
     setTimeout(() => setAlert(null), 3000);
   };
 
+  const roleLabel = (role) => {
+    if (role === 'admin') return t('userRoleAdmin');
+    if (role === 'supervisor') return t('userRoleSupervisor');
+    return t('userRoleUser');
+  };
+
   const handleAdd = async () => {
     if (!newEmp.trim() || !newPass.trim()) {
       showAlert('error', t('authFillFields'));
@@ -82,6 +97,12 @@ export default function UserManager() {
   };
 
   const handleEdit = (u) => {
+    // El supervisor no puede editar (ni siquiera ver el formulario de) la
+    // cuenta del Administrador — queda protegida a nivel de UI y de backend.
+    if (isSupervisor && u.role === 'admin') {
+      showAlert('error', t('userCannotModifyAdmin'));
+      return;
+    }
     setEditingUser(u);
     setEditName(u.name);
     setEditRole(u.role);
@@ -103,7 +124,8 @@ export default function UserManager() {
       setEditingUser(null);
       load();
     } else {
-      showAlert('error', result.error || t('userUpdateError'));
+      const err = result.error === 'cannot_modify_admin' ? t('userCannotModifyAdmin') : (result.error || t('userUpdateError'));
+      showAlert('error', err);
     }
   };
 
@@ -174,21 +196,29 @@ export default function UserManager() {
       <div className="section-header">
         <h2>👥 {t('userManagement')}</h2>
         <div className="section-header-actions">
-          {selectedIds.length > 0 && (
+          {isAdmin && selectedIds.length > 0 && (
             <button className="btn btn-danger" onClick={handleBulkDelete}>
               🗑️ {t('deleteSelected')} ({selectedIds.length})
             </button>
           )}
-          <button
-            className="btn btn-primary"
-            onClick={() => setShowAddForm(!showAddForm)}
-          >
-            {showAddForm ? `✕ ${t('cancel')}` : `➕ ${t('addUser')}`}
-          </button>
+          {isAdmin && (
+            <button
+              className="btn btn-primary"
+              onClick={() => setShowAddForm(!showAddForm)}
+            >
+              {showAddForm ? `✕ ${t('cancel')}` : `➕ ${t('addUser')}`}
+            </button>
+          )}
         </div>
       </div>
 
-      {showAddForm && (
+      {isSupervisor && (
+        <div className="alert alert-info" style={{ marginBottom: '12px' }}>
+          ℹ️ {t('userSupervisorHint')}
+        </div>
+      )}
+
+      {isAdmin && showAddForm && (
         <div className="form-section">
           <h3>➕ {t('addUser')}</h3>
           <div className="form-grid">
@@ -223,6 +253,7 @@ export default function UserManager() {
               <label>{t('userRole')}</label>
               <select value={newRole} onChange={e => setNewRole(e.target.value)}>
                 <option value="user">{t('userRoleUser')}</option>
+                <option value="supervisor">{t('userRoleSupervisor')}</option>
                 <option value="admin">{t('userRoleAdmin')}</option>
               </select>
             </div>
@@ -254,7 +285,9 @@ export default function UserManager() {
               <label>{t('userRole')}</label>
               <select value={editRole} onChange={e => setEditRole(e.target.value)}>
                 <option value="user">{t('userRoleUser')}</option>
-                <option value="admin">{t('userRoleAdmin')}</option>
+                <option value="supervisor">{t('userRoleSupervisor')}</option>
+                {/* Un supervisor nunca puede otorgar el rol de administrador */}
+                {isAdmin && <option value="admin">{t('userRoleAdmin')}</option>}
               </select>
             </div>
             <div className="form-field">
@@ -291,7 +324,7 @@ export default function UserManager() {
       <div className="user-list">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <h3>📋 {t('userList')}</h3>
-          {users.length > 1 && (
+          {isAdmin && users.length > 1 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={toggleSelectAll}>
               <input
                 type="checkbox"
@@ -306,56 +339,65 @@ export default function UserManager() {
           <div className="empty-mini"><p>{t('userNoUsers')}</p></div>
         ) : (
           <div className="user-cards">
-            {users.map(u => (
-              <div key={u.id} className={`user-card ${selectedIds.includes(u.id) ? 'selected' : ''}`} onClick={() => toggleSelect(u.id)}>
-                <div className="user-card-info">
-                  {u.employeeNumber !== user.employeeNumber && (
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(u.id)}
-                      onChange={() => {}} // Handled by card click
-                      style={{ marginRight: '8px' }}
-                    />
-                  )}
-                  <div className="user-card-avatar">
-                    {u.photoPath ? (
-                      <UserCardPhoto path={u.photoPath} />
-                    ) : (
-                      u.employeeNumber === user.employeeNumber ? '⭐' : (u.role === 'admin' ? '🛡️' : '👤')
+            {users.map(u => {
+              const adminLockedForMe = isSupervisor && u.role === 'admin';
+              return (
+                <div
+                  key={u.id}
+                  className={`user-card ${selectedIds.includes(u.id) ? 'selected' : ''}`}
+                  onClick={() => isAdmin && toggleSelect(u.id)}
+                >
+                  <div className="user-card-info">
+                    {isAdmin && u.employeeNumber !== user.employeeNumber && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(u.id)}
+                        onChange={() => {}} // Handled by card click
+                        style={{ marginRight: '8px' }}
+                      />
                     )}
-                  </div>
-                  <div className="user-card-body">
-                    <div className="user-card-name">
-                      <strong>{u.name || u.employeeNumber}</strong>
-                      {u.employeeNumber === user.employeeNumber && (
-                        <span className="badge badge-me">{t('userYou')}</span>
+                    <div className="user-card-avatar">
+                      {u.photoPath ? (
+                        <UserCardPhoto path={u.photoPath} />
+                      ) : (
+                        u.employeeNumber === user.employeeNumber ? '⭐' : (ROLE_ICONS[u.role] || '👤')
                       )}
                     </div>
-                    <div className="user-card-meta">
-                      <span>#{u.employeeNumber}</span>
-                      <span className={`badge badge-${u.role}`}>{u.role === 'admin' ? t('userRoleAdmin') : t('userRoleUser')}</span>
-                      <span className={`badge badge-${u.isActive ? 'active' : 'inactive'}`}>
-                        {u.isActive ? t('userActive') : t('userInactive')}
-                      </span>
+                    <div className="user-card-body">
+                      <div className="user-card-name">
+                        <strong>{u.name || u.employeeNumber}</strong>
+                        {u.employeeNumber === user.employeeNumber && (
+                          <span className="badge badge-me">{t('userYou')}</span>
+                        )}
+                      </div>
+                      <div className="user-card-meta">
+                        <span>#{u.employeeNumber}</span>
+                        <span className={`badge badge-${u.role}`}>{roleLabel(u.role)}</span>
+                        <span className={`badge badge-${u.isActive ? 'active' : 'inactive'}`}>
+                          {u.isActive ? t('userActive') : t('userInactive')}
+                        </span>
+                      </div>
                     </div>
                   </div>
+                  <div className="user-card-actions">
+                    {!adminLockedForMe && (
+                      <button className="icon-btn" onClick={() => handleEdit(u)} title={t('editUser')}>
+                        ✏️
+                      </button>
+                    )}
+                    {isAdmin && u.employeeNumber !== user.employeeNumber && (
+                      <button
+                        className="icon-btn danger"
+                        onClick={() => handleDelete(u)}
+                        title={t('deleteUser')}
+                      >
+                        🗑️
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="user-card-actions">
-                  <button className="icon-btn" onClick={() => handleEdit(u)} title={t('editUser')}>
-                    ✏️
-                  </button>
-                  {u.employeeNumber !== user.employeeNumber && (
-                    <button
-                      className="icon-btn danger"
-                      onClick={() => handleDelete(u)}
-                      title={t('deleteUser')}
-                    >
-                      🗑️
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

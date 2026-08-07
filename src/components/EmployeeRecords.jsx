@@ -9,7 +9,7 @@ import MasterPdfImport from './MasterPdfImport.jsx';
 export default function EmployeeRecords() {
   const { user, bulkDeleteUsers } = useAuth();
   const { t } = useLang();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'supervisor';
 
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);

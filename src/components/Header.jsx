@@ -16,6 +16,7 @@ export default function Header({ view, setView, checklistCount }) {
   };
 
   const isAdmin = user?.role === 'admin';
+  const isSupervisor = user?.role === 'supervisor';
   const currentLang = languages.find(l => l.code === lang);
 
   useEffect(() => {
@@ -48,7 +49,7 @@ export default function Header({ view, setView, checklistCount }) {
                 {user?.photoPath ? (
                   <UserAvatarPhoto path={user.photoPath} />
                 ) : (
-                  isAdmin ? '🛡️' : '👤'
+                  isAdmin ? '🛡️' : (isSupervisor ? '🧭' : '👤')
                 )}
               </div>
               <div className="user-info-text">
