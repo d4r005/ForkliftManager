@@ -1948,3 +1948,242 @@ body {
   gap: 8px;
   align-items: center;
 }
+
+/* ===== EXCEL IMPORT ===== */
+.excel-import-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.excel-import-modal {
+  background: var(--card-bg, #1e1e2e);
+  border: 1px solid var(--border, #383848);
+  border-radius: 16px;
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.excel-import-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border, #383848);
+}
+
+.excel-import-header h2 {
+  font-size: 1.2rem;
+}
+
+.excel-import-body {
+  padding: 20px;
+}
+
+.import-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+  padding: 20px;
+}
+
+.import-empty p {
+  color: var(--text-secondary, #9aa0a6);
+  font-size: 0.9rem;
+}
+
+.import-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.import-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.step-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--primary, #6366f1);
+  color: white;
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.import-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.import-preview-info {
+  font-size: 0.9rem;
+  color: var(--text-secondary, #9aa0a6);
+}
+
+.import-table-wrap {
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border, #383848);
+  border-radius: 8px;
+}
+
+.import-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.import-table th,
+.import-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border, #383848);
+  white-space: nowrap;
+}
+
+.import-table th {
+  background: var(--muted, #2a2a3a);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+}
+
+.cell-mono {
+  font-family: monospace;
+  font-size: 0.75rem;
+}
+
+.import-results {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.results-summary {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.result-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--muted, #2a2a3a);
+  padding: 12px 20px;
+  border-radius: 10px;
+  min-width: 80px;
+}
+
+.stat-num {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.stat-num.stat-success { color: #22c55e; }
+.stat-num.stat-updated { color: #ffc107; }
+.stat-num.stat-error { color: #ef4444; }
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #9aa0a6);
+}
+
+.results-detail {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.result-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+}
+
+.result-row.row-ok { background: rgba(34, 197, 94, 0.08); }
+.result-row.row-err { background: rgba(239, 68, 68, 0.08); }
+
+.row-icon { flex-shrink: 0; }
+.row-status { margin-left: auto; font-size: 0.78rem; color: var(--text-secondary, #9aa0a6); }
+
+/* ===== EXTRACTED DATA BANNER ===== */
+.extracted-data-banner {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(99, 102, 241, 0.05));
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.extracted-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #6366f1;
+  margin-bottom: 8px;
+}
+
+.extracted-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.extracted-field {
+  font-size: 0.82rem;
+  color: var(--text, #e8eaed);
+}
+
+.extracted-field span {
+  color: var(--text-secondary, #9aa0a6);
+  font-weight: 600;
+}
+
+.doc-hint {
+  font-size: 0.72rem;
+  color: var(--text-secondary, #9aa0a6);
+  margin-bottom: 8px;
+  font-style: italic;
+}
+
+/* alert info */
+.alert-info {
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #a5b4fc;
+}
+
+/* alert warning */
+.alert-warning {
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  color: #ffc107;
+}

@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../i18n/LanguageContext.jsx';
 import { supabase } from '../lib/supabase.js';
+import { extractPdfText, parseDocumentData } from '../utils/pdfExtract.js';
+import ExcelImport from './ExcelImport.jsx';
 
 export default function EmployeeRecords() {
   const { user } = useAuth();
@@ -12,8 +14,11 @@ export default function EmployeeRecords() {
   const [loading, setLoading] = useState(true);
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [showEditForm, setShowEditForm] = useState(false);
+  const [showExcelImport, setShowExcelImport] = useState(false);
   const [pdfViewer, setPdfViewer] = useState(null);
   const [alert, setAlert] = useState(null);
+  const [extractedData, setExtractedData] = useState(null);
+  const [extracting, setExtracting] = useState(false);
 
   const [editData, setEditData] = useState({
     employeeNumber: '', name: '', curp: '', rfc: '',
@@ -56,12 +61,14 @@ export default function EmployeeRecords() {
       dc3PdfPath: emp.dc3PdfPath || null,
       diplomaPdfPath: emp.diplomaPdfPath || null,
     });
+    setExtractedData(null);
     setSelectedEmp(emp);
     setShowEditForm(true);
   };
 
   const handleFileSelect = (target) => {
     setUploadTarget(target);
+    setExtractedData(null);
     fileInputRef.current?.click();
   };
 
@@ -90,6 +97,24 @@ export default function EmployeeRecords() {
       return;
     }
 
+    // Si es DC3 o diploma, extraer texto del PDF
+    let pdfData = null;
+    if (uploadTarget === 'dc3' || uploadTarget === 'diploma') {
+      setExtracting(true);
+      try {
+        const text = await extractPdfText(file);
+        pdfData = parseDocumentData(text);
+        if (pdfData.curp || pdfData.name || pdfData.vigencia) {
+          setExtractedData({ ...pdfData, target: uploadTarget });
+          showAlert('info', t('expDataExtracted'));
+        }
+      } catch (err) {
+        console.warn('PDF extract error:', err);
+      }
+      setExtracting(false);
+    }
+
+    // Subir el archivo
     setUploading(true);
     try {
       const ext = file.name.split('.').pop().toLowerCase();
@@ -110,6 +135,21 @@ export default function EmployeeRecords() {
     }
     setUploading(false);
     event.target.value = '';
+  };
+
+  // Aplicar datos extraídos del PDF al formulario
+  const applyExtractedData = () => {
+    if (!extractedData) return;
+    setEditData(prev => ({
+      ...prev,
+      curp: extractedData.curp || prev.curp,
+      rfc: extractedData.rfc || prev.rfc,
+      name: extractedData.name || prev.name,
+      dc3Vigencia: extractedData.target === 'dc3' ? (extractedData.vigencia || prev.dc3Vigencia) : prev.dc3Vigencia,
+      diplomaVigencia: extractedData.target === 'diploma' ? (extractedData.vigencia || prev.diplomaVigencia) : prev.diplomaVigencia,
+    }));
+    setExtractedData(null);
+    showAlert('success', t('expDataApplied'));
   };
 
   const handleSaveExpediente = async () => {
@@ -149,7 +189,6 @@ export default function EmployeeRecords() {
         .storage
         .from('expedientes')
         .createSignedUrl(filePath, 60);
-
       if (error) throw error;
       setPdfViewer({ url: data.signedUrl, title, expires: Date.now() + 55000 });
     } catch (err) {
@@ -191,6 +230,17 @@ export default function EmployeeRecords() {
     );
   }
 
+  // Excel Import modal
+  if (showExcelImport) {
+    return (
+      <ExcelImport
+        onDone={() => loadExpedientes()}
+        onClose={() => setShowExcelImport(false)}
+      />
+    );
+  }
+
+  // PDF Viewer (restricted)
   if (pdfViewer) {
     return (
       <div className="pdf-viewer-overlay" onContextMenu={handleContextMenu} onCopy={(e) => e.preventDefault()}>
@@ -214,6 +264,7 @@ export default function EmployeeRecords() {
     );
   }
 
+  // EDIT FORM
   if (showEditForm && isAdmin) {
     return (
       <div className="expedientes">
@@ -225,13 +276,36 @@ export default function EmployeeRecords() {
           onChange={handleFileUpload}
         />
 
-        {alert && <div className={`alert alert-${alert.type}`}>{alert.type === 'success' ? '✅ ' : '⚠️ '}{alert.msg}</div>}
+        {alert && <div className={`alert alert-${alert.type}`}>{alert.type === 'success' ? '✅ ' : alert.type === 'info' ? 'ℹ️ ' : '⚠️ '}{alert.msg}</div>}
 
         <div className="expediente-edit">
           <div className="section-header">
             <h2>📁 {t('expEditTitle')} — {editData.employeeNumber}</h2>
             <button className="btn btn-secondary" onClick={() => setShowEditForm(false)}>← {t('back')}</button>
           </div>
+
+          {/* Datos extraídos del PDF - aplicar al formulario */}
+          {extractedData && (
+            <div className="extracted-data-banner">
+              <div className="extracted-title">🔍 {t('expDataFound')}</div>
+              <div className="extracted-fields">
+                {extractedData.name && <div className="extracted-field"><span>{t('expName')}:</span> {extractedData.name}</div>}
+                {extractedData.curp && <div className="extracted-field"><span>CURP:</span> {extractedData.curp}</div>}
+                {extractedData.rfc && <div className="extracted-field"><span>RFC:</span> {extractedData.rfc}</div>}
+                {extractedData.vigencia && <div className="extracted-field"><span>{t('expVigencia')}:</span> {extractedData.vigencia}</div>}
+              </div>
+              <button className="btn btn-sm btn-primary" onClick={applyExtractedData}>
+                ✅ {t('expApplyData')}
+              </button>
+            </div>
+          )}
+
+          {extracting && (
+            <div className="upload-progress">
+              <div className="loading-spinner" style={{ width: 20, height: 20 }}>⏳</div>
+              <span>{t('expExtracting')}</span>
+            </div>
+          )}
 
           <div className="expediente-edit-grid">
             <div className="expediente-photo-section">
@@ -295,6 +369,7 @@ export default function EmployeeRecords() {
                 onUpload={() => handleFileSelect('dc3')}
                 onRemove={() => handleRemoveFile('dc3')}
                 t={t} uploading={uploading}
+                extractHint={t('expPdfAutoFill')}
               />
               <DocUploadCard
                 icon="🎓" title={t('expDiplomaTitle')}
@@ -302,6 +377,7 @@ export default function EmployeeRecords() {
                 onUpload={() => handleFileSelect('diploma')}
                 onRemove={() => handleRemoveFile('diploma')}
                 t={t} uploading={uploading}
+                extractHint={t('expPdfAutoFill')}
               />
             </div>
           </div>
@@ -322,6 +398,7 @@ export default function EmployeeRecords() {
     );
   }
 
+  // EXPEDIENTE VIEW
   if (selectedEmp) {
     return (
       <div className="expedientes">
@@ -408,6 +485,7 @@ export default function EmployeeRecords() {
     );
   }
 
+  // LIST VIEW
   return (
     <div className="expedientes">
       {alert && <div className={`alert alert-${alert.type}`}>{alert.type === 'success' ? '✅ ' : '⚠️ '}{alert.msg}</div>}
@@ -415,6 +493,11 @@ export default function EmployeeRecords() {
       <div className="expediente-list">
         <div className="section-header">
           <h2>📁 {t('expTitle')}</h2>
+          {isAdmin && (
+            <button className="btn btn-primary" onClick={() => setShowExcelImport(true)}>
+              📊 {t('impTitle')}
+            </button>
+          )}
         </div>
 
         <div className="expediente-warning">🔒 {t('expSecurityNotice')}</div>
@@ -465,13 +548,14 @@ export default function EmployeeRecords() {
 
 // ===== Sub-componentes =====
 
-function DocUploadCard({ icon, title, hasFile, onUpload, onRemove, t, uploading }) {
+function DocUploadCard({ icon, title, hasFile, onUpload, onRemove, t, uploading, extractHint }) {
   return (
     <div className="doc-card">
       <div className="doc-header">
         <span className="doc-icon">{icon}</span>
         <span className="doc-title">{title}</span>
       </div>
+      {extractHint && <div className="doc-hint">💡 {extractHint}</div>}
       <div className="doc-actions">
         {hasFile ? (
           <>
