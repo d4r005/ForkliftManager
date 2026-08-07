@@ -11,6 +11,8 @@ import UserManager from './components/UserManager.jsx';
 import EmployeeRecords from './components/EmployeeRecords.jsx';
 import Login from './components/Login.jsx';
 import { exportChecklistToExcel } from './utils/exportExcel.js';
+import Navigation from './components/Navigation.jsx';
+import { Capacitor } from '@capacitor/core';
 
 function AppContent() {
   const { user, loading: authLoading } = useAuth();
@@ -70,21 +72,31 @@ function AppContent() {
     );
   }
 
+  const isAdmin = user?.role === 'admin';
+  const platform = Capacitor.getPlatform();
+  const isAndroid = platform === 'android';
+
   return (
-    <div className="app">
+    <div className={`app ${isAndroid ? 'platform-android' : 'platform-web'}`}>
       <Header
         view={view}
         setView={(v) => { setView(v); if (v !== 'form') setEditing(null); }}
         checklistCount={store.data.checklists.length}
       />
 
-      {store.error && (
-        <div className="alert alert-error" style={{ margin: '12px 16px' }}>
-          ⚠️ {store.error}
-        </div>
-      )}
+      <Navigation
+        view={view}
+        setView={(v) => { setView(v); if (v !== 'form') setEditing(null); }}
+        checklistCount={store.data.checklists.length}
+        isAdmin={isAdmin}
+      />
 
       <main className="app-main">
+        {store.error && (
+          <div className="alert alert-error" style={{ marginBottom: '16px' }}>
+            ⚠️ {store.error}
+          </div>
+        )}
         {view === 'dashboard' && (
           <Dashboard
             checklists={store.data.checklists}

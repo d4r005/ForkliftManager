@@ -1,0 +1,5 @@
+- [x] Crear componente `Navigation.jsx` con soporte para SideNav y BottomNav
+- [x] Modificar `Header.jsx` para eliminar la navegación antigua
+- [x] Actualizar `App.jsx` para incluir el componente `Navigation` y ajustar el layout
+- [x] Añadir estilos CSS en `main.css` para la navegación adaptativa
+- [x] Verificar el funcionamiento en diferentes tamaños de pantalla

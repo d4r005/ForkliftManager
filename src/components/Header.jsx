@@ -85,47 +85,7 @@ export default function Header({ view, setView, checklistCount }) {
         </div>
       </div>
 
-      <nav className="header-nav">
-        <button
-          className={`nav-btn ${view === 'dashboard' ? 'active' : ''}`}
-          onClick={() => setView('dashboard')}
-        >
-          📊 {t('dashboard')}
-        </button>
-        <button
-          className={`nav-btn ${view === 'list' ? 'active' : ''}`}
-          onClick={() => setView('list')}
-        >
-          📋 {t('savedChecklists')}
-          {checklistCount > 0 && <span className="badge">{checklistCount}</span>}
-        </button>
-        <button
-          className={`nav-btn ${view === 'form' ? 'active' : ''}`}
-          onClick={() => setView('form')}
-        >
-          ➕ {t('newChecklist')}
-        </button>
-        <button
-          className={`nav-btn ${view === 'forklifts' ? 'active' : ''}`}
-          onClick={() => setView('forklifts')}
-        >
-          🚜 {t('forklifts')}
-        </button>
-        <button
-          className={`nav-btn ${view === 'expedientes' ? 'active' : ''}`}
-          onClick={() => setView('expedientes')}
-        >
-          📁 {t('expTitle')}
-        </button>
-        {isAdmin && (
-          <button
-            className={`nav-btn ${view === 'users' ? 'active' : ''}`}
-            onClick={() => setView('users')}
-          >
-            👥 {t('userManagement')}
-          </button>
-        )}
-      </nav>
+      {/* Navigation removed and moved to Navigation component */}
     </header>
   );
 }
