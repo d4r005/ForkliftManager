@@ -1,29 +1,31 @@
-# Walkthrough: Automatización de Nombres e Importación de PDF Maestro
+# Walkthrough: Eliminación Masiva de Usuarios y Expedientes
 
-Se han implementado herramientas avanzadas para agilizar la gestión de expedientes, permitiendo corregir el orden de los nombres desde Excel y cargar documentos masivamente desde un único PDF.
+Se ha implementado una funcionalidad de selección múltiple que permite a los administradores eliminar varios usuarios o expedientes de forma simultánea, optimizando la gestión del personal.
 
 ## Funcionalidades Implementadas
 
-### 1. Inversión Inteligente de Nombres (Excel)
-En la ventana de **Importar Excel**, ahora encontrarás nuevas opciones en la vista previa:
-- **Toggle "Invertir orden de nombres"**: Permite cambiar de `Apellidos Nombre` a `Nombre Apellidos`.
-- **Selector de palabras**: Permite elegir cuántas palabras del final corresponden al nombre (útil para nombres compuestos como "Juan Jose").
-- **Visualización en tiempo real**: Los nombres resaltan en color azul cuando la transformación está activa.
+### 1. Selección Múltiple
+- **Checkboxes**: Se han añadido casillas de selección en cada tarjeta de usuario y expediente.
+- **Seleccionar todo**: Una opción global para marcar todos los elementos visibles de una vez.
+- **Indicador Visual**: Las tarjetas seleccionadas cambian de color para una mejor identificación.
 
-### 2. Importador de PDF Maestro (DC3/Diplomas)
-En la lista de **Expedientes**, se ha añadido el botón "📄 Importar PDF Maestro":
-- **División Automática**: Sube un único PDF con múltiples páginas; el sistema lo dividirá en archivos individuales por página.
-- **Detección por IA/Texto**: El sistema lee cada página buscando nombres o CURP.
-- **Asociación Inteligente**: Compara los datos detectados con tu lista de empleados y sugiere una asignación con un porcentaje de certeza.
-- **Revisión Manual**: Puedes corregir cualquier asignación antes de procesar.
-- **Carga Directa**: Al confirmar, cada página se guarda en el expediente del empleado correspondiente como un PDF independiente.
+### 2. Eliminación por Lote (Bulk Delete)
+- **Botón Dinámico**: El botón de "Eliminar seleccionados" solo aparece cuando hay al menos un elemento marcado.
+- **Confirmación Segura**: Antes de proceder, el sistema muestra el número total de elementos que se van a eliminar para evitar errores.
+- **Protección de Cuenta**: El sistema impide automáticamente la selección y eliminación del administrador que está operando en ese momento.
 
 ## Cambios Técnicos
-- [NEW] [pdfSplit.js](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/utils/pdfSplit.js): Utiliza `pdf-lib` para manipular PDFs en el navegador.
-- [NEW] [MasterPdfImport.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/MasterPdfImport.jsx): Componente de interfaz para el proceso de PDF Maestro.
-- [MODIFY] [ExcelImport.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/ExcelImport.jsx): Lógica de inversión de nombres integrada.
-- [MODIFY] [EmployeeRecords.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/EmployeeRecords.jsx): Punto de entrada para la nueva funcionalidad.
+- [NEW] [bulk_delete_migration.sql](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/supabase/bulk_delete_migration.sql): Nueva función RPC para procesar eliminaciones masivas en el servidor.
+- [MODIFY] [AuthContext.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/context/AuthContext.jsx): Integración de la función `bulkDeleteUsers`.
+- [MODIFY] [UserManager.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/UserManager.jsx) y [EmployeeRecords.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/EmployeeRecords.jsx): Actualización de la lógica de interfaz para manejar la selección y el borrado masivo.
+- [MODIFY] [expedientes_migration.sql](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/supabase/expedientes_migration.sql): Se actualizó la función `list_expedientes` para incluir el ID interno del usuario, necesario para la eliminación precisa.
 
 ## Verificación Recomendada
-1. **Excel**: Prueba subiendo un Excel con nombres invertidos y usa el toggle para corregirlos.
-2. **PDF Maestro**: Prueba subiendo un PDF con 2 o 3 certificados. Verifica que el sistema identifique a los empleados y que, tras procesar, el PDF de cada empleado en su expediente tenga solo **una página**.
+1. Ve a **Gestión de usuarios** o **Expedientes**.
+2. Marca la casilla "Seleccionar todo".
+3. Verifica que el botón de "Eliminar seleccionados" muestre el conteo correcto.
+4. Desmarca algunos elementos y verifica que el conteo se actualice.
+5. Intenta eliminar y confirma el diálogo.
+
+> [!IMPORTANT]
+> Recuerda ejecutar el archivo `supabase/bulk_delete_migration.sql` en tu SQL Editor de Supabase y volver a ejecutar la parte de `list_expedientes` en `expedientes_migration.sql` para que el sistema funcione correctamente.

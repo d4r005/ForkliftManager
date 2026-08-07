@@ -151,11 +151,28 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Admin: eliminar múltiples usuarios
+  const bulkDeleteUsers = async (userIds) => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'not_authorized' };
+    try {
+      const { data, error: rpcError } = await supabase
+        .rpc('bulk_delete_users', {
+          p_admin_employee_number: user.employeeNumber,
+          p_user_ids: userIds,
+        });
+
+      if (rpcError) throw rpcError;
+      return { success: data?.success || false, error: data?.error };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  };
+
   return (
     <AuthContext.Provider value={{
       user, loading, error, setError,
       signIn, signOut, changePassword,
-      getUsers, createUser, updateUser, deleteUser,
+      getUsers, createUser, updateUser, deleteUser, bulkDeleteUsers,
     }}>
       {children}
     </AuthContext.Provider>

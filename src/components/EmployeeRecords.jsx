@@ -7,7 +7,7 @@ import ExcelImport from './ExcelImport.jsx';
 import MasterPdfImport from './MasterPdfImport.jsx';
 
 export default function EmployeeRecords() {
-  const { user } = useAuth();
+  const { user, bulkDeleteUsers } = useAuth();
   const { t } = useLang();
   const isAdmin = user?.role === 'admin';
 
@@ -21,6 +21,7 @@ export default function EmployeeRecords() {
   const [alert, setAlert] = useState(null);
   const [extractedData, setExtractedData] = useState(null);
   const [extracting, setExtracting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
 
   const [editData, setEditData] = useState({
     employeeNumber: '', name: '', curp: '', rfc: '', nss: '', jobTitle: '',
@@ -187,6 +188,44 @@ export default function EmployeeRecords() {
     const pathKey = target === 'photo' ? 'photoPath' :
                    target === 'dc3' ? 'dc3PdfPath' : 'diplomaPdfPath';
     setEditData(prev => ({ ...prev, [pathKey]: null }));
+  };
+
+  const toggleSelect = (empNum, e) => {
+    e.stopPropagation();
+    if (empNum === user.employeeNumber) return;
+    setSelectedIds(prev =>
+      prev.includes(empNum) ? prev.filter(id => id !== empNum) : [...prev, empNum]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length > 0) {
+      setSelectedIds([]);
+    } else {
+      const selectable = employees
+        .filter(e => e.employeeNumber !== user.employeeNumber)
+        .map(e => e.employeeNumber);
+      setSelectedIds(selectable);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`${t('confirmBulkDelete')} (${selectedIds.length} ${t('itemsSelected')})`)) return;
+
+    // Obtener UUIDs de los empleados seleccionados
+    const userIds = employees
+      .filter(e => selectedIds.includes(e.employeeNumber))
+      .map(e => e.id);
+
+    const result = await bulkDeleteUsers(userIds);
+    if (result.success) {
+      showAlert('success', t('userDeleted'));
+      setSelectedIds([]);
+      loadExpedientes();
+    } else {
+      showAlert('error', result.error || t('userDeleteError'));
+    }
   };
 
   const viewPdf = async (filePath, title) => {
@@ -525,6 +564,11 @@ export default function EmployeeRecords() {
           <h2>📁 {t('expTitle')}</h2>
           {isAdmin && (
             <div className="section-header-actions">
+              {selectedIds.length > 0 && (
+                <button className="btn btn-danger" onClick={handleBulkDelete}>
+                  🗑️ {t('deleteSelected')} ({selectedIds.length})
+                </button>
+              )}
               <button className="btn btn-secondary" onClick={() => setShowMasterPdfImport(true)}>
                 📄 {t('expMasterPdfTitle')}
               </button>
@@ -540,12 +584,34 @@ export default function EmployeeRecords() {
         {employees.length === 0 ? (
           <div className="empty-mini"><p>{t('expNoRecords')}</p></div>
         ) : (
+          <div className="expediente-list-header" style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 16px 8px' }}>
+            {employees.length > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={toggleSelectAll}>
+                <input
+                  type="checkbox"
+                  checked={selectedIds.length > 0 && selectedIds.length === employees.filter(e => e.employeeNumber !== user.employeeNumber).length}
+                  readOnly
+                />
+                <span style={{ fontSize: '14px', fontWeight: '500' }}>{t('selectAll')}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {employees.length > 0 && (
           <div className="expediente-cards">
             {employees.map(emp => {
               const dc3Valid = isVigenciaValid(emp.dc3Vigencia);
               const diplomaValid = isVigenciaValid(emp.diplomaVigencia);
+              const isSelected = selectedIds.includes(emp.employeeNumber);
+
               return (
-                <div key={emp.employeeNumber} className="expediente-card" onClick={() => setSelectedEmp(emp)}>
+                <div key={emp.employeeNumber} className={`expediente-card ${isSelected ? 'selected' : ''}`} onClick={() => setSelectedEmp(emp)}>
+                  {isAdmin && emp.employeeNumber !== user.employeeNumber && (
+                    <div style={{ padding: '0 8px' }} onClick={(e) => toggleSelect(emp.employeeNumber, e)}>
+                      <input type="checkbox" checked={isSelected} readOnly />
+                    </div>
+                  )}
                   <div className="exp-card-photo">
                     {emp.photoPath ? <PhotoThumb path={emp.photoPath} /> : <div className="photo-placeholder">👤</div>}
                   </div>

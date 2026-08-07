@@ -1,60 +1,46 @@
-# Plan de Implementación: Automatización de Nombres y Carga Masiva desde PDF Maestro
+# Plan de Implementación: Eliminación Masiva de Usuarios y Expedientes
 
-Este plan describe las mejoras para procesar nombres en el orden correcto y automatizar la asignación de DC3/Diplomas desde un único archivo PDF que contiene los documentos de todos los empleados.
+Este plan detalla los cambios para permitir que un administrador seleccione y elimine múltiples usuarios o expedientes de forma simultánea.
 
 ## User Review Required
 
-> [!IMPORTANT]
-> **Carga Masiva desde PDF Maestro**:
-> - Se requiere la librería `pdf-lib` para dividir el PDF original en archivos individuales por página sin perder calidad.
-> - El sistema analizará el texto de cada página para extraer el nombre del empleado.
-> - Se utilizará un algoritmo de coincidencia (fuzzy match) para asociar la página con el empleado correcto en la base de datos, incluso si hay pequeñas variaciones en el nombre.
+> [!WARNING]
+> La eliminación de un usuario o expediente es permanente y afectará a la tabla `app_users`. Se incluirá una confirmación de seguridad antes de proceder.
 
-> [!NOTE]
-> **Orden de Nombres en Excel**:
-> - Se añadirá una opción en la vista previa del Excel para "Invertir Nombres".
-> - Se permitirá configurar si el nombre tiene 1 o 2 palabras al final (ej: "Perez Juan" -> "Juan Perez" vs "Perez Ruiz Juan Jose" -> "Juan Jose Perez Ruiz").
+> [!IMPORTANT]
+> No se permitirá que el administrador se elimine a sí mismo en una operación masiva para evitar bloqueos accidentales del sistema.
 
 ## Proposed Changes
 
-### 1. Procesamiento de Nombres (Excel)
+### Base de Datos (Supabase)
 
-#### [MODIFY] [ExcelImport.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/ExcelImport.jsx)
-- Añadir controles en la interfaz de vista previa:
-    - Toggle: "Invertir Apellidos y Nombres".
-    - Selector: "Palabras del nombre al final" (1 o 2).
-- Actualizar la lógica de normalización para aplicar estas transformaciones antes de mostrar los datos en la tabla.
+#### [NEW] [bulk_delete_migration.sql](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/supabase/bulk_delete_migration.sql)
+- Crear una nueva función RPC `bulk_delete_users` que reciba un array de UUIDs.
 
-### 2. División y Asignación de PDF Maestro
+### Frontend
 
-#### [NEW] [pdfSplit.js](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/utils/pdfSplit.js)
-- Utilizar `pdf-lib` para cargar un PDF y extraer una página específica como un nuevo `Blob` de PDF.
+#### [MODIFY] [AuthContext.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/context/AuthContext.jsx)
+- Añadir la función `bulkDeleteUsers(userIds)` para invocar el nuevo RPC.
 
-#### [NEW] [MasterPdfImport.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/MasterPdfImport.jsx)
-- Un nuevo modal que permita subir el "PDF Maestro".
-- Flujo de trabajo:
-    1. Subir PDF.
-    2. Extraer texto de cada página usando `extractPdfText`.
-    3. Para cada página:
-        - Extraer Nombre/CURP.
-        - Buscar coincidencia en la lista de empleados (usando `levenshtein` o similar para nombres).
-        - Mostrar una tabla de "Asignaciones detectadas" para revisión del usuario.
-    4. Al confirmar:
-        - Dividir el PDF por página.
-        - Subir cada página a `storage/expedientes`.
-        - Actualizar el campo `dc3_pdf_path` o `diploma_pdf_path` del empleado vía RPC.
-
-### 3. Integración en Interfaz
+#### [MODIFY] [UserManager.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/UserManager.jsx)
+- Implementar estado para selección múltiple (`selectedIds`).
+- Añadir checkbox en cada tarjeta de usuario.
+- Añadir checkbox de "Seleccionar todo".
+- Añadir botón "Eliminar seleccionados" en la cabecera cuando hay elementos seleccionados.
 
 #### [MODIFY] [EmployeeRecords.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/EmployeeRecords.jsx)
-- Añadir botón "Importar PDF Maestro".
-- Integrar el componente `MasterPdfImport`.
+- Implementar estado para selección múltiple.
+- Añadir checkbox en cada tarjeta de expediente.
+- Añadir checkbox de "Seleccionar todo".
+- Añadir botón "Eliminar seleccionados".
+
+#### [MODIFY] [translations.js](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/i18n/translations.js)
+- Añadir traducciones para: `selectAll`, `deleteSelected`, `confirmBulkDelete`, `itemsSelected`.
 
 ## Verification Plan
 
 ### Manual Verification
-1. **Inversión de Nombres**: Cargar Excel con "CRUZ RUIZ VENUSTIANO", probar invertir con 1 palabra ("VENUSTIANO CRUZ RUIZ") y verificar.
-2. **Importación Maestro**: Subir un PDF de 2 páginas con documentos de dos empleados diferentes.
-    - Verificar que el sistema reconozca los nombres.
-    - Confirmar y verificar que en el expediente de cada empleado aparezca el PDF correspondiente a su página solamente.
-3. **Seguridad**: Asegurar que los archivos individuales heredan las políticas de acceso del bucket `expedientes`.
+1. **Selección**: Verificar que al marcar "Seleccionar todo" se marquen todos los usuarios/expedientes visibles.
+2. **Protección**: Intentar seleccionar al administrador actual y verificar que el sistema lo ignore o impida su eliminación masiva.
+3. **Eliminación**: Seleccionar 3 usuarios de prueba y confirmar la eliminación. Verificar que desaparezcan de ambas vistas (Usuarios y Expedientes).
+4. **Estado**: Verificar que el botón de eliminar masivamente solo aparezca cuando hay al menos un elemento seleccionado.

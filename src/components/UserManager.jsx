@@ -3,13 +3,14 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../i18n/LanguageContext.jsx';
 
 export default function UserManager() {
-  const { user, getUsers, createUser, updateUser, deleteUser } = useAuth();
+  const { user, getUsers, createUser, updateUser, deleteUser, bulkDeleteUsers } = useAuth();
   const { t } = useLang();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [alert, setAlert] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
 
   // New user form
   const [newEmp, setNewEmp] = useState('');
@@ -96,6 +97,38 @@ export default function UserManager() {
     }
   };
 
+  const toggleSelect = (id) => {
+    if (users.find(u => u.id === id)?.employeeNumber === user.employeeNumber) return;
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length > 0) {
+      setSelectedIds([]);
+    } else {
+      const selectable = users
+        .filter(u => u.employeeNumber !== user.employeeNumber)
+        .map(u => u.id);
+      setSelectedIds(selectable);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`${t('confirmBulkDelete')} (${selectedIds.length} ${t('itemsSelected')})`)) return;
+
+    const result = await bulkDeleteUsers(selectedIds);
+    if (result.success) {
+      showAlert('success', t('userDeleted'));
+      setSelectedIds([]);
+      load();
+    } else {
+      showAlert('error', result.error || t('userDeleteError'));
+    }
+  };
+
   if (loading) {
     return (
       <div className="loading-screen">
@@ -115,12 +148,19 @@ export default function UserManager() {
 
       <div className="section-header">
         <h2>👥 {t('userManagement')}</h2>
-        <button
-          className="btn btn-primary"
-          onClick={() => setShowAddForm(!showAddForm)}
-        >
-          {showAddForm ? `✕ ${t('cancel')}` : `➕ ${t('addUser')}`}
-        </button>
+        <div className="section-header-actions">
+          {selectedIds.length > 0 && (
+            <button className="btn btn-danger" onClick={handleBulkDelete}>
+              🗑️ {t('deleteSelected')} ({selectedIds.length})
+            </button>
+          )}
+          <button
+            className="btn btn-primary"
+            onClick={() => setShowAddForm(!showAddForm)}
+          >
+            {showAddForm ? `✕ ${t('cancel')}` : `➕ ${t('addUser')}`}
+          </button>
+        </div>
       </div>
 
       {showAddForm && (
@@ -224,14 +264,34 @@ export default function UserManager() {
       )}
 
       <div className="user-list">
-        <h3>📋 {t('userList')}</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <h3>📋 {t('userList')}</h3>
+          {users.length > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={toggleSelectAll}>
+              <input
+                type="checkbox"
+                checked={selectedIds.length > 0 && selectedIds.length === users.filter(u => u.employeeNumber !== user.employeeNumber).length}
+                readOnly
+              />
+              <span style={{ fontSize: '14px', fontWeight: '500' }}>{t('selectAll')}</span>
+            </div>
+          )}
+        </div>
         {users.length === 0 ? (
           <div className="empty-mini"><p>{t('userNoUsers')}</p></div>
         ) : (
           <div className="user-cards">
             {users.map(u => (
-              <div key={u.id} className="user-card">
+              <div key={u.id} className={`user-card ${selectedIds.includes(u.id) ? 'selected' : ''}`} onClick={() => toggleSelect(u.id)}>
                 <div className="user-card-info">
+                  {u.employeeNumber !== user.employeeNumber && (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(u.id)}
+                      onChange={() => {}} // Handled by card click
+                      style={{ marginRight: '8px' }}
+                    />
+                  )}
                   <div className="user-card-avatar">
                     {u.employeeNumber === user.employeeNumber ? '⭐' : (u.role === 'admin' ? '🛡️' : '👤')}
                   </div>

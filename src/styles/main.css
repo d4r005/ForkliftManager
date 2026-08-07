@@ -1596,6 +1596,11 @@ body {
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
+.user-card.selected {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
 .user-card-info {
   display: flex;
   align-items: center;
@@ -1751,6 +1756,11 @@ body {
   border-color: var(--primary, #6366f1);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.expediente-card.selected {
+  border-color: var(--primary, #6366f1);
+  background: var(--primary-light);
 }
 
 .exp-card-photo .photo-placeholder,

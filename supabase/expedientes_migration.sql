@@ -70,6 +70,7 @@ BEGIN
     'success', true,
     'employees', COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
+        'id', id,
         'employeeNumber', employee_number,
         'name', name,
         'curp', curp,
