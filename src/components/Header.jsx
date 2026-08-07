@@ -1,8 +1,17 @@
 import { useLang } from '../i18n/LanguageContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { languages } from '../data/checklistItems.js';
 
 export default function Header({ view, setView, checklistCount }) {
   const { lang, setLang, t } = useLang();
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = () => {
+    if (confirm(t('authSignOutConfirm'))) signOut();
+  };
+
+  const userEmail = user?.email || '';
+  const userInitial = userEmail[0]?.toUpperCase() || 'U';
 
   return (
     <header className="app-header">
@@ -28,6 +37,15 @@ export default function Header({ view, setView, checklistCount }) {
                 <span className="lang-code">{l.code.toUpperCase()}</span>
               </button>
             ))}
+          </div>
+
+          {/* User menu */}
+          <div className="user-menu">
+            <div className="user-avatar" title={userEmail}>{userInitial}</div>
+            <span className="user-email">{userEmail}</span>
+            <button className="icon-btn" onClick={handleSignOut} title={t('authSignOut')}>
+              🚪
+            </button>
           </div>
         </div>
       </div>

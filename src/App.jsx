@@ -1,27 +1,35 @@
 import { useState } from 'react';
 import { LanguageProvider, useLang } from './i18n/LanguageContext.jsx';
+import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { useStore } from './hooks/useStore.js';
 import Header from './components/Header.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import ChecklistForm from './components/ChecklistForm.jsx';
 import SavedChecklists from './components/SavedChecklists.jsx';
 import ForkliftManager from './components/ForkliftManager.jsx';
+import Login from './components/Login.jsx';
 import { exportChecklistToExcel } from './utils/exportExcel.js';
 
 function AppContent() {
+  const { user, loading: authLoading } = useAuth();
   const { lang, t } = useLang();
-  const store = useStore();
+  const store = useStore(user);
   const [view, setView] = useState('dashboard');
   const [editing, setEditing] = useState(null);
 
-  const handleSave = (checklist) => {
-    if (editing) {
-      store.updateChecklist(editing.id, checklist);
-      setEditing(null);
-    } else {
-      store.addChecklist(checklist);
+  const handleSave = async (checklist) => {
+    try {
+      if (editing) {
+        await store.updateChecklist(editing.id, checklist);
+        setEditing(null);
+      } else {
+        await store.addChecklist(checklist);
+      }
+      setView('list');
+    } catch (err) {
+      console.error('Save error:', err);
+      alert(t('authSignInError') + ': ' + err.message);
     }
-    setView('list');
   };
 
   const handleEdit = (c) => {
@@ -38,6 +46,31 @@ function AppContent() {
     exportChecklistToExcel(c, lang);
   };
 
+  // Mostrar loading mientras se verifica la sesión
+  if (authLoading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner">M</div>
+        <p>{t('authLoading')}</p>
+      </div>
+    );
+  }
+
+  // Mostrar login si no hay sesión
+  if (!user) {
+    return <Login />;
+  }
+
+  // Mostrar loading de datos
+  if (store.loading && store.data.checklists.length === 0 && store.data.forklifts.length === 0) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner">M</div>
+        <p>{t('authLoading')}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <Header
@@ -45,6 +78,12 @@ function AppContent() {
         setView={(v) => { setView(v); if (v !== 'form') setEditing(null); }}
         checklistCount={store.data.checklists.length}
       />
+
+      {store.error && (
+        <div className="alert alert-error" style={{ margin: '12px 16px' }}>
+          ⚠️ {store.error}
+        </div>
+      )}
 
       <main className="app-main">
         {view === 'dashboard' && (
@@ -85,7 +124,7 @@ function AppContent() {
 
       <footer className="app-footer">
         <p>{t('company')} — {t('normRef')}</p>
-        <p className="footer-sub">MontaControl v1.0 — ES · EN · 中文 · Tiếng Việt</p>
+        <p className="footer-sub">MontaControl v2.0 — ES · EN · 中文 · Tiếng Việt</p>
       </footer>
     </div>
   );
@@ -94,7 +133,9 @@ function AppContent() {
 export default function App() {
   return (
     <LanguageProvider>
-      <AppContent />
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </LanguageProvider>
   );
 }

@@ -6,11 +6,15 @@ export default function ForkliftManager({ forklifts, onAdd, onDelete }) {
   const [newId, setNewId] = useState('');
   const [newName, setNewName] = useState('');
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!newId.trim()) return;
-    onAdd({ id: newId.trim(), name: newName.trim() });
-    setNewId('');
-    setNewName('');
+    try {
+      await onAdd({ id: newId.trim(), name: newName.trim() });
+      setNewId('');
+      setNewName('');
+    } catch (err) {
+      console.error('Add forklift error:', err);
+    }
   };
 
   return (
@@ -49,7 +53,7 @@ export default function ForkliftManager({ forklifts, onAdd, onDelete }) {
             {forklifts.map(f => (
               <div key={f.id} className="forklift-card">
                 <div className="forklift-card-info">
-                  <div className="forklift-card-id">🚜 {f.id}</div>
+                  <div className="forklift-card-id">🚜 {f.idCode}</div>
                   {f.name && <div className="forklift-card-name">{f.name}</div>}
                 </div>
                 <button

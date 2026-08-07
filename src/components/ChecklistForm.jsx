@@ -39,7 +39,7 @@ export default function ChecklistForm({ onSave, onCancel, editing, forklifts }) 
     setForm(prev => ({ ...prev, items: {} }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const errs = {};
     if (!form.forkliftId) errs.forkliftId = t('required');
     if (!form.operatorName) errs.operatorName = t('required');
@@ -76,8 +76,8 @@ export default function ChecklistForm({ onSave, onCancel, editing, forklifts }) 
               >
                 <option value="">— {t('selectForklift')} —</option>
                 {forklifts.map(f => (
-                  <option key={f.id} value={f.id}>
-                    {f.id} {f.name ? `(${f.name})` : ''}
+                  <option key={f.id} value={f.idCode}>
+                    {f.idCode} {f.name ? `(${f.name})` : ''}
                   </option>
                 ))}
                 <option value="__custom">{t('addNew')}...</option>
