@@ -5,11 +5,9 @@ import { supabase } from '../lib/supabase.js';
 
 export async function exportChecklistToPdf(checklist, lang = 'es') {
   try {
-    // Obtenemos la URL pública y añadimos un timestamp para saltar el caché (?t=123456)
     const { data } = supabase.storage.from('expedientes').getPublicUrl('templates/template.pdf');
     const freshUrl = `${data.publicUrl}?t=${Date.now()}`;
 
-    // Descargamos usando fetch con modo 'no-cache'
     const response = await fetch(freshUrl, { cache: 'no-store' });
     if (!response.ok) throw new Error('No se pudo descargar la plantilla.');
     const templateBytes = await response.arrayBuffer();
@@ -23,34 +21,43 @@ export async function exportChecklistToPdf(checklist, lang = 'es') {
         page.drawText(String(text), { x, y, size, color: rgb(0, 0, 0) });
     };
 
-    // --- CABECERA ---
-    drawText(checklist.forkliftId, 110, height - 165, 11);
-    drawText(checklist.operatorName, 380, height - 165, 10);
-    drawText(`${checklist.day}/${checklist.month + 1}/${checklist.year}`, 110, height - 188, 10);
-    drawText(checklist.inspectorName, 380, height - 188, 10);
+    // --- 1. CABECERA (NUEVA PLANTILLA) ---
+    // Identificación del montacargas
+    drawText(checklist.forkliftId, 50, height - 128, 10);
+    // Fecha (en el recuadro central pequeño)
+    drawText(`${checklist.day}/${checklist.month + 1}/${checklist.year}`, 148, height - 128, 9);
+    // Nombre del operador
+    drawText(checklist.operatorName, 220, height - 128, 9);
+    // Inspector (arriba junto al operador si es necesario, o solo abajo)
+    // drawText(checklist.inspectorName, 380, height - 128, 9);
 
-    // --- CHECKLIST ---
-    const xBaseColumn = 236.2;
+    // --- 2. CHECKLIST (SAT / INS / N/A) ---
+    // Columna del día: El '1' está en x=223 aprox. Ancho col = 9.2 pts
+    const xBaseColumn = 222.8;
     const xColumn = xBaseColumn + ((checklist.day - 1) * 9.25);
 
-    let yPos = height - 250.5;
+    // Y inicial: El item 1 está en height - 192 aprox.
+    let yPos = height - 192.5;
     checklistItems.forEach(item => {
       const rating = checklist.items?.[item.id];
       if (rating) {
-        drawText(rating, xColumn, yPos + 1.5, 5.5);
+        // Dibujamos el rating centrado en la celda
+        drawText(rating, xColumn, yPos + 1.5, 5);
       }
-      yPos -= 14.05;
+      yPos -= 12.82; // Espaciado vertical para la nueva plantilla
     });
 
-    // --- PIE ---
-    drawText(checklist.inspectorName, 180, height - 618, 9);
+    // --- 3. PIE DE PÁGINA ---
+    // Nombre de quien revisa
+    drawText(checklist.inspectorName, 175, height - 528, 9);
+    // Observaciones
     if (checklist.observations) {
       page.drawText(checklist.observations, {
         x: 130,
-        y: height - 632,
-        size: 8,
+        y: height - 542,
+        size: 7.5,
         maxWidth: width - 200,
-        lineHeight: 10,
+        lineHeight: 9,
       });
     }
 
