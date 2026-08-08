@@ -1,144 +1,104 @@
-# MontaControl 🚜
+# ForkliftManager 🚜
 
-Sistema de checklist de inspección de montacargas basado en la norma **NOM-006-STPS-2014** (Numeral 7.8.5).
+Sistema integral de gestión y checklist de inspección de montacargas basado en la norma **NOM-006-STPS-2014** (Numeral 7.8.5).
 
 **Idiomas soportados:** 🇲🇽 Español · 🇺🇸 English · 🇨🇳 中文 · 🇻🇳 Tiếng Việt
 
-## Características
+## Características Principales
 
-- ✅ Checklist de 26 puntos de inspección de montacargas
-- 🌐 Interfaz en 4 idiomas (Español, Inglés, Chino, Vietnamita)
-- 🔐 Autenticación de usuarios (Supabase Auth)
-- ☁️ Base de datos en la nube (Supabase PostgreSQL)
-- 💾 Sincronización entre dispositivos
-- 📊 Exportación a Excel (formato compatible con F-SH-006-06)
-- 📱 Diseño responsive (mobile-first para uso en piso)
-- 🚜 Gestión de montacargas registrados
-- 📈 Dashboard con estadísticas y tasa de aprobación
-- 🖨️ Soporte de impresión
-- 🛡️ Row-Level Security (cada usuario solo ve sus datos)
+- ✅ **Checklist Normativo:** 26 puntos de inspección detallados para montacargas.
+- 📱 **Multiplataforma:** Web (Vite) y App Nativa (Android vía Capacitor).
+- 🔐 **Gestión de Usuarios:** Sistema de autenticación por Número de Empleado con roles (Administrador / Usuario).
+- 📁 **Expedientes Digitales:** Módulo para gestionar documentos de empleados (DC3, Diplomas, CURP, RFC).
+- 🤖 **Importación Inteligente (OCR):** Procesador de "Master PDF" que divide documentos masivos y los asigna automáticamente a empleados usando reconocimiento de texto.
+- 📊 **Dashboard:** Estadísticas en tiempo real y tasa de aprobación de inspecciones.
+- ☁️ **Sincronización:** Base de datos en la nube con Supabase (PostgreSQL).
+- 📈 **Excel & PDF:** Exportación a Excel (formato F-SH-006-06) e importación masiva de datos.
+- 🛡️ **Seguridad:** Lógica de negocio protegida mediante Funciones RPC en base de datos.
 
 ## Tecnología
 
-- React 18 + Vite
-- Supabase (Auth + PostgreSQL + RLS)
-- SheetJS (XLSX) para exportación a Excel
-- CSS puro (sin frameworks)
+- **Frontend:** React 18 + Vite
+- **Móvil:** Capacitor 7+ (Soporte nativo para Android)
+- **Backend:** Supabase (PostgreSQL + Auth personalizado + Storage)
+- **Inteligencia/Documentos:** 
+  - `tesseract.js` para OCR y reconocimiento de texto.
+  - `pdf-lib` y `pdfjs-dist` para manipulación y segmentación de PDFs.
+- **Datos:** `xlsx` (SheetJS) para manejo de hojas de cálculo.
+- **Estilos:** CSS3 puro con variables dinámicas.
 
-## Instalación
+## Instalación y Desarrollo
 
+### Requisitos previos
+- Node.js (v18+)
+- Android Studio (para la versión móvil)
+
+### Configuración
 ```bash
 # 1. Clonar el repositorio
-git clone https://github.com/d4r005/MontaControl.git
-cd MontaControl
+git clone https://github.com/d4r005/ForkliftManager.git
+cd ForkliftManager
 
 # 2. Instalar dependencias
 npm install
 
 # 3. Configurar variables de entorno
 cp .env.example .env
-# Editar .env con tus credenciales de Supabase
+# Editar .env con VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY
+```
 
-# 4. Ejecutar la migración SQL
-#    - Ir a Supabase Dashboard > SQL Editor > New Query
-#    - Pegar el contenido de supabase/migration.sql
-#    - Ejecutar
-
-# 5. Iniciar el servidor de desarrollo
+### Comandos útiles
+```bash
+# Iniciar servidor de desarrollo web
 npm run dev
+
+# Sincronizar y compilar para Android
+npm run android
+
+# Construir para producción
+npm run build
+
+# Abrir el proyecto en Android Studio
+npm run cap:open
 ```
 
-## Configuración de Supabase
+## Base de Datos (Supabase)
 
-### Variables de entorno
+El sistema utiliza un esquema relacional optimizado. Ejecuta `supabase/migration.sql` en el SQL Editor para crear:
 
-Crea un archivo `.env` en la raíz del proyecto:
+- **Tablas:**
+  - `app_users`: Gestión de empleados, roles y contraseñas (cifradas con pgcrypto).
+  - `forklifts`: Registro de unidades de montacargas.
+  - `checklists`: Historial de inspecciones con almacenamiento JSONB.
+- **Funciones RPC:**
+  - `login_user`: Validación de credenciales por número de empleado.
+  - `update_expediente`: Gestión avanzada de documentos y vigencias.
+  - `create_user` / `get_users`: Administración de personal.
 
-```env
-VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
-VITE_SUPABASE_ANON_KEY=tu-anon-key
-```
-
-### Base de datos
-
-Ejecuta el script `supabase/migration.sql` en el SQL Editor de Supabase. Esto crea:
-
-- Tabla `forklifts` — registro de montacargas
-- Tabla `checklists` — revisiones guardadas (con items en JSONB)
-- Políticas RLS — cada usuario solo accede a sus propios datos
-- Triggers — auto-actualización de `updated_at` y auto-asignación de `user_id`
-
-## Estructura
+## Estructura del Proyecto
 
 ```
-MontaControl/
+ForkliftManager/
+├── android/            # Código nativo Android (Capacitor)
 ├── src/
 │   ├── components/
-│   │   ├── Login.jsx           # Pantalla de login/registro
-│   │   ├── Header.jsx          # Header con selector de idioma + user menu
-│   │   ├── Dashboard.jsx       # Panel principal con estadísticas
-│   │   ├── ChecklistForm.jsx   # Formulario de checklist
-│   │   ├── SavedChecklists.jsx # Lista de revisiones guardadas
-│   │   └── ForkliftManager.jsx # Gestión de montacargas
+│   │   ├── MasterPdfImport.jsx # Splitter de PDF con OCR
+│   │   ├── EmployeeRecords.jsx # Gestión de documentos
+│   │   ├── UserManager.jsx     # Panel de administración
+│   │   ├── Dashboard.jsx       # Estadísticas
+│   │   └── ...
 │   ├── context/
-│   │   └── AuthContext.jsx     # Contexto de autenticación (Supabase)
-│   ├── data/
-│   │   └── checklistItems.js   # 26 items de inspección (multilingüe)
-│   ├── i18n/
-│   │   ├── LanguageContext.jsx # Contexto de idioma
-│   │   └── translations.js     # Traducciones de UI
-│   ├── hooks/
-│   │   └── useStore.js         # Hook para datos (Supabase)
-│   ├── lib/
-│   │   └── supabase.js         # Cliente de Supabase
+│   │   └── AuthContext.jsx     # Auth por # de Empleado
 │   ├── utils/
-│   │   └── exportExcel.js     # Exportación a Excel
-│   ├── styles/
-│   │   └── main.css           # Estilos
-│   ├── App.jsx                # Componente principal
-│   └── main.jsx               # Entry point
+│   │   ├── pdfExtract.js       # Lógica de OCR y parsing
+│   │   └── pdfSplit.js         # Lógica de segmentación de archivos
+│   ├── i18n/                   # Traducciones (ES, EN, ZH, VI)
+│   └── styles/                 # main.css
 ├── supabase/
-│   └── migration.sql          # Script SQL para crear tablas y RLS
-├── .env.example               # Template de variables de entorno
-├── package.json
-├── vite.config.js
-└── index.html
+│   └── migration.sql           # Esquema completo de DB
+├── capacitor.config.json       # Configuración móvil
+└── vite.config.js
 ```
-
-## Items de inspección (NOM-006-STPS-2014)
-
-1. Llanta / revestimiento / presión de aire
-2. Todas las luces
-3. Dispositivos de advertencia
-4. Número de horas / millaje
-5. Relojes indicadores
-6. Daños a la carrocería
-7. Escapes de aceite / fluido / combustible / agua
-8. Nivel de aceite de motor
-9. Nivel del refrigerante
-10. Nivel de combustible
-11. Nivel de aceite hidráulico
-12. Batería
-13. Puntos de lubricación externa
-14. Nivel de tanque de gas
-15. Claxon
-16. Dirección hidráulica
-17. Freno
-18. Freno de emergencia
-19. Inclinación de las cuchillas
-20. Subir y bajar las cuchillas
-21. Aditamentos hidráulicos
-22. Estado y seguro de las cuchillas
-23. Cinturón de seguridad
-24. Transmisión / Dirección
-25. Equipo de protección contra incendio
-26. Alarma de reversa
-
-## Valores de calificación
-
-- **SAT** — Satisfactorio / 合格 / Đạt
-- **INS** — Insatisfactorio / 不合格 / Không đạt
-- **N/A** — No Aplica / 不适用 / Không áp dụng
 
 ## Licencia
 

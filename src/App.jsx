@@ -11,6 +11,7 @@ import UserManager from './components/UserManager.jsx';
 import EmployeeRecords from './components/EmployeeRecords.jsx';
 import Login from './components/Login.jsx';
 import { exportChecklistToExcel } from './utils/exportExcel.js';
+import { exportChecklistToPdf } from './utils/exportPdf.js';
 import Navigation from './components/Navigation.jsx';
 import { Capacitor } from '@capacitor/core';
 
@@ -48,6 +49,10 @@ function AppContent() {
 
   const handleExport = (c) => {
     exportChecklistToExcel(c, lang);
+  };
+
+  const handleExportPdf = (c) => {
+    exportChecklistToPdf(c, lang);
   };
 
   if (authLoading) {
@@ -122,6 +127,7 @@ function AppContent() {
             onEdit={handleEdit}
             onDelete={store.deleteChecklist}
             onExport={handleExport}
+            onExportPdf={handleExportPdf}
             onNew={handleNew}
           />
         )}

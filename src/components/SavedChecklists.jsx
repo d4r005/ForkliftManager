@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useLang } from '../i18n/LanguageContext.jsx';
 import { checklistItems, ratingOptions } from '../data/checklistItems.js';
 
-export default function SavedChecklists({ checklists, onEdit, onDelete, onExport, onNew }) {
+export default function SavedChecklists({ checklists, onEdit, onDelete, onExport, onExportPdf, onNew }) {
   const { lang, t } = useLang();
   const [search, setSearch] = useState('');
   const [filterMonth, setFilterMonth] = useState(-1);
@@ -90,6 +90,9 @@ export default function SavedChecklists({ checklists, onEdit, onDelete, onExport
                 <div className="card-actions" onClick={e => e.stopPropagation()}>
                   <button className="icon-btn" onClick={() => onExport(c)} title={t('exportExcel')}>
                     📊
+                  </button>
+                  <button className="icon-btn" onClick={() => onExportPdf(c)} title="Exportar PDF">
+                    📄
                   </button>
                   <button className="icon-btn" onClick={() => onEdit(c)} title={t('editChecklist')}>
                     ✏️
