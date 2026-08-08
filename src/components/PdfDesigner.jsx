@@ -4,10 +4,8 @@ import { getPdfConfig, savePdfConfig } from '../utils/pdfConfig.js';
 import { checklistItems } from '../data/checklistItems.js';
 import * as pdfjsLib from 'pdfjs-dist';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+// Usar la CDN de Cloudflare para el worker, evitando problemas de resolución en build
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
 
 export default function PdfDesigner({ onClose }) {
   const [config, setConfig] = useState(null);
@@ -16,7 +14,6 @@ export default function PdfDesigner({ onClose }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [zoom, setZoom] = useState(1.0);
-
   const [dragging, setDragging] = useState(null);
 
   useEffect(() => {
@@ -29,11 +26,16 @@ export default function PdfDesigner({ onClose }) {
 
         if (!signed?.signedUrl) throw new Error('No se pudo obtener la URL del PDF');
 
-        const loadingTask = pdfjsLib.getDocument(signed.signedUrl);
+        // Cargar PDF vía pdf.js
+        const loadingTask = pdfjsLib.getDocument({
+            url: signed.signedUrl,
+            // Deshabilitar workers si hay problemas de CORS, aunque CDN suele ir bien
+            disableWorker: false
+        });
+
         const pdf = await loadingTask.promise;
         const page = await pdf.getPage(1);
 
-        // Obtener tamaño real del PDF
         const viewportOrig = page.getViewport({ scale: 1 });
         setPdfSize({ width: viewportOrig.width, height: viewportOrig.height });
 
@@ -66,22 +68,13 @@ export default function PdfDesigner({ onClose }) {
     y: Math.round((pdfSize.height - (top / zoom)) * 10) / 10
   });
 
-  const handleMouseDown = (e, path) => {
-    e.preventDefault();
-    setDragging({
-      path,
-      startX: e.clientX,
-      startY: e.clientY,
-      initialLeft: e.target.offsetLeft,
-      initialTop: e.target.offsetTop
-    });
-  };
-
   const handleMouseMove = (e) => {
     if (!dragging) return;
-    const dx = (e.clientX - dragging.startX);
-    const dy = (e.clientY - dragging.startY);
-    const { x, y } = screenToPdf(dragging.initialLeft + dx, dragging.initialTop + dy);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const newLeft = (e.clientX - rect.left - dragging.offsetX);
+    const newTop = (e.clientY - rect.top - dragging.offsetY);
+
+    const { x, y } = screenToPdf(newLeft, newTop);
 
     const newConfig = { ...config };
     const parts = dragging.path.split('.');
@@ -94,6 +87,16 @@ export default function PdfDesigner({ onClose }) {
     setConfig(newConfig);
   };
 
+  const handleMouseDown = (e, path) => {
+    e.preventDefault();
+    const rect = e.target.getBoundingClientRect();
+    setDragging({
+      path,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top
+    });
+  };
+
   const updateChecklistMetric = (key, val) => {
     setConfig(prev => ({
       ...prev,
@@ -101,7 +104,16 @@ export default function PdfDesigner({ onClose }) {
     }));
   };
 
-  if (loading) return <div className="loading-screen">Detectando dimensiones del PDF...</div>;
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await savePdfConfig(config);
+      alert('Configuración guardada en Supabase.');
+    } catch (err) { alert(err.message); }
+    setSaving(false);
+  };
+
+  if (loading) return <div className="loading-screen">Cargando bitácora...</div>;
 
   return (
     <div className="pdf-designer" onMouseMove={handleMouseMove} onMouseUp={() => setDragging(null)}>
@@ -119,11 +131,11 @@ export default function PdfDesigner({ onClose }) {
             <input type="range" min="0.5" max="2" step="0.1" value={zoom} onChange={e => setZoom(parseFloat(e.target.value))} />
           </div>
           <div className="control-item">
-            <label>Ancho Col (Días)</label>
+            <label>Ancho Col</label>
             <input type="number" step="0.05" value={config.checklist.deltaX} onChange={e => updateChecklistMetric('deltaX', e.target.value)} />
           </div>
           <div className="control-item">
-            <label>Alto Fila (Ítems)</label>
+            <label>Alto Fila</label>
             <input type="number" step="0.05" value={config.checklist.deltaY} onChange={e => updateChecklistMetric('deltaY', e.target.value)} />
           </div>
           <button className="btn btn-secondary" onClick={onClose}>X</button>
@@ -143,7 +155,6 @@ export default function PdfDesigner({ onClose }) {
           <DraggableBox label="Fecha" path="header.date" config={config.header.date} zoom={zoom} pdfH={pdfSize.height} onDown={handleMouseDown} />
           <DraggableBox label="Operador" path="header.operatorName" config={config.header.operatorName} zoom={zoom} pdfH={pdfSize.height} onDown={handleMouseDown} />
 
-          {/* Referencia Checklist (Día 1, Item 1) */}
           <div className="draggable-box checklist-ref" style={{
                 ...pdfToScreen(config.checklist.baseX, config.checklist.baseY),
                 position: 'absolute', width: config.checklist.deltaX * zoom, height: config.checklist.deltaY * zoom,
@@ -152,7 +163,6 @@ export default function PdfDesigner({ onClose }) {
             Ref D1/I1
           </div>
 
-          {/* Guías de alineación (Muestran dónde caerán los textos) */}
           {[...Array(31)].map((_, d) =>
             checklistItems.slice(0, 26).map((item, i) => (
               <div key={`${d}-${i}`} style={{
@@ -179,15 +189,6 @@ export default function PdfDesigner({ onClose }) {
       `}</style>
     </div>
   );
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await savePdfConfig(config);
-      alert('¡Configuración guardada!');
-    } catch (err) { alert(err.message); }
-    setSaving(false);
-  }
 }
 
 function DraggableBox({ label, config, zoom, pdfH, onDown, path }) {

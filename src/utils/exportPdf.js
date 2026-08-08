@@ -4,18 +4,21 @@ import { translations } from '../i18n/translations.js';
 import { supabase } from '../lib/supabase.js';
 import { getPdfConfig } from './pdfConfig.js';
 
+/**
+ * Genera el PDF de la bitácora usando coordenadas dinámicas de Supabase.
+ * VERSION: 11 - Sin escalado, sin drawPage, solo escritura directa.
+ */
 export async function exportChecklistToPdf(checklist, lang = 'es') {
+  console.log('Iniciando generación de PDF v11...');
   try {
-    // Usamos la configuración dinámica desde Supabase
     const config = await getPdfConfig();
+    console.log('Configuración cargada:', config);
 
     const { data: templateBlob, error: downloadError } = await supabase.storage
       .from('expedientes')
       .download('templates/bitacora_v2.pdf');
 
-    if (downloadError) {
-      throw new Error(`No se encontró el archivo 'templates/bitacora_v2.pdf' en Supabase.`);
-    }
+    if (downloadError) throw new Error(`No se encontró la plantilla en Supabase: ${downloadError.message}`);
 
     const templateBytes = await templateBlob.arrayBuffer();
     const pdfDoc = await PDFDocument.load(templateBytes);
@@ -23,15 +26,16 @@ export async function exportChecklistToPdf(checklist, lang = 'es') {
     const { width, height } = page.getSize();
 
     const drawText = (text, x, y, size = 9) => {
-        if (!text) return;
+        if (text === undefined || text === null || text === '') return;
         page.drawText(String(text), { x, y, size, color: rgb(0, 0, 0) });
     };
 
-    // --- COORDINADAS DINÁMICAS DESDE EL DISEÑADOR ---
+    // Cabecera
     drawText(checklist.forkliftId, config.header.forkliftId.x, config.header.forkliftId.y, config.header.forkliftId.size);
     drawText(`${checklist.day}/${checklist.month + 1}/${checklist.year}`, config.header.date.x, config.header.date.y, config.header.date.size);
     drawText(checklist.operatorName, config.header.operatorName.x, config.header.operatorName.y, config.header.operatorName.size);
 
+    // Checklist
     const { baseX, baseY, deltaX, deltaY, fontSize: checkSize } = config.checklist;
     const xColumn = baseX + ((checklist.day - 1) * deltaX);
 
@@ -39,11 +43,12 @@ export async function exportChecklistToPdf(checklist, lang = 'es') {
     checklistItems.forEach(item => {
       const rating = checklist.items?.[item.id];
       if (rating) {
-        drawText(rating, xColumn, yPos + 1.5, checkSize);
+        drawText(rating, xColumn, yPos + 1.5, checkSize || 5);
       }
       yPos -= deltaY;
     });
 
+    // Pie
     drawText(checklist.inspectorName, config.footer.inspectorName.x, config.footer.inspectorName.y, config.footer.inspectorName.size);
     if (checklist.observations) {
       page.drawText(checklist.observations, {
@@ -60,11 +65,11 @@ export async function exportChecklistToPdf(checklist, lang = 'es') {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Bitacora_${checklist.forkliftId}_${checklist.day}.pdf`;
+    link.download = `Bitacora_${checklist.forkliftId}_D${checklist.day}.pdf`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 100);
   } catch (error) {
-    console.error('PDF Error:', error);
-    alert('Error: ' + error.message);
+    console.error('Error crítico en PDF:', error);
+    alert('Error al generar PDF: ' + error.message);
   }
 }
