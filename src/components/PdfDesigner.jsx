@@ -4,9 +4,11 @@ import { getPdfConfig, savePdfConfig } from '../utils/pdfConfig.js';
 import { checklistItems } from '../data/checklistItems.js';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Usar el worker integrado de la librería para evitar problemas de CORS/Fetch
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.entry';
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+// Configuración compatible con Vite para el worker de PDF.js
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 
 export default function PdfDesigner({ onClose }) {
   const [config, setConfig] = useState(null);
