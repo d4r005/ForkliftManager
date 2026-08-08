@@ -6,7 +6,8 @@ import { getPdfConfig } from './pdfConfig.js';
 
 export async function exportChecklistToPdf(checklist, lang = 'es') {
   try {
-    const config = getPdfConfig();
+    // Usamos la configuración dinámica desde Supabase
+    const config = await getPdfConfig();
 
     const { data: templateBlob, error: downloadError } = await supabase.storage
       .from('expedientes')

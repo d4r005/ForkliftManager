@@ -211,6 +211,36 @@ DROP TRIGGER IF EXISTS checklists_updated_at ON checklists;
 CREATE TRIGGER checklists_updated_at BEFORE UPDATE ON checklists
   FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
 
+CREATE TABLE IF NOT EXISTS system_configs (
+  key        TEXT PRIMARY KEY,
+  value      JSONB NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE system_configs DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO system_configs (key, value)
+VALUES ('pdf_layout', '{
+  "header": {
+    "forkliftId": {"x": 50, "y": 664, "size": 10},
+    "date": {"x": 148, "y": 664, "size": 8.5},
+    "operatorName": {"x": 220, "y": 664, "size": 9},
+    "inspectorNameTop": {"x": 380, "y": 664, "size": 9}
+  },
+  "checklist": {
+    "baseX": 222.8,
+    "baseY": 600.0,
+    "deltaX": 9.25,
+    "deltaY": 12.82,
+    "fontSize": 5
+  },
+  "footer": {
+    "inspectorName": {"x": 175, "y": 264, "size": 9},
+    "observations": {"x": 130, "y": 250, "size": 7.5}
+  }
+}'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+
 INSERT INTO app_users (employee_number, password_hash, name, role)
 VALUES ('10008', crypt('Branco2025', gen_salt('bf')), 'Administrador', 'admin')
 ON CONFLICT (employee_number) DO UPDATE
