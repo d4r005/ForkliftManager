@@ -2,10 +2,12 @@ import { PDFDocument, rgb } from 'pdf-lib';
 import { checklistItems } from '../data/checklistItems.js';
 import { translations } from '../i18n/translations.js';
 import { supabase } from '../lib/supabase.js';
+import { getPdfConfig } from './pdfConfig.js';
 
 export async function exportChecklistToPdf(checklist, lang = 'es') {
   try {
-    // Apuntamos al nuevo nombre de archivo para saltar el caché de raíz
+    const config = getPdfConfig();
+
     const { data: templateBlob, error: downloadError } = await supabase.storage
       .from('expedientes')
       .download('templates/bitacora_v2.pdf');
@@ -15,7 +17,6 @@ export async function exportChecklistToPdf(checklist, lang = 'es') {
     }
 
     const templateBytes = await templateBlob.arrayBuffer();
-
     const pdfDoc = await PDFDocument.load(templateBytes);
     const page = pdfDoc.getPages()[0];
     const { width, height } = page.getSize();
@@ -25,43 +26,29 @@ export async function exportChecklistToPdf(checklist, lang = 'es') {
         page.drawText(String(text), { x, y, size, color: rgb(0, 0, 0) });
     };
 
-    // --- COORDENADAS PARA PLANTILLA NUEVA (RECUADROS BLANCOS) ---
+    // --- COORDINADAS DINÁMICAS DESDE EL DISEÑADOR ---
+    drawText(checklist.forkliftId, config.header.forkliftId.x, config.header.forkliftId.y, config.header.forkliftId.size);
+    drawText(`${checklist.day}/${checklist.month + 1}/${checklist.year}`, config.header.date.x, config.header.date.y, config.header.date.size);
+    drawText(checklist.operatorName, config.header.operatorName.x, config.header.operatorName.y, config.header.operatorName.size);
 
-    // 1. Identificación del montacargas (Recuadro 1)
-    drawText(checklist.forkliftId, 45, height - 128, 10);
+    const { baseX, baseY, deltaX, deltaY, fontSize: checkSize } = config.checklist;
+    const xColumn = baseX + ((checklist.day - 1) * deltaX);
 
-    // 2. Fecha (Recuadro 2 - Central)
-    const dateText = `${checklist.day}/${checklist.month + 1}/${checklist.year}`;
-    drawText(dateText, 142, height - 128, 8.5);
-
-    // 3. Nombre del operador (Recuadro 3 - Largo)
-    drawText(checklist.operatorName, 225, height - 128, 9);
-
-    // --- CHECKLIST ---
-    // Columna del día: El '1' está en x=223 aprox.
-    const xBaseColumn = 222.8;
-    const xColumn = xBaseColumn + ((checklist.day - 1) * 9.25);
-
-    // Y inicial: El item 1 (Llantas) está más arriba en la nueva plantilla
-    let yPos = height - 192.5;
+    let yPos = baseY;
     checklistItems.forEach(item => {
       const rating = checklist.items?.[item.id];
       if (rating) {
-        drawText(rating, xColumn, yPos + 1.5, 5);
+        drawText(rating, xColumn, yPos + 1.5, checkSize);
       }
-      yPos -= 12.82; // Espaciado vertical reducido para la nueva plantilla
+      yPos -= deltaY;
     });
 
-    // --- PIE DE PÁGINA ---
-    // Nombre de quien revisa
-    drawText(checklist.inspectorName, 175, height - 528, 9);
-
-    // Observaciones
+    drawText(checklist.inspectorName, config.footer.inspectorName.x, config.footer.inspectorName.y, config.footer.inspectorName.size);
     if (checklist.observations) {
       page.drawText(checklist.observations, {
-        x: 130,
-        y: height - 542,
-        size: 7.5,
+        x: config.footer.observations.x,
+        y: config.footer.observations.y,
+        size: config.footer.observations.size,
         maxWidth: width - 200,
         lineHeight: 9,
       });

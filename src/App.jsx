@@ -9,6 +9,7 @@ import SavedChecklists from './components/SavedChecklists.jsx';
 import ForkliftManager from './components/ForkliftManager.jsx';
 import UserManager from './components/UserManager.jsx';
 import EmployeeRecords from './components/EmployeeRecords.jsx';
+import PdfDesigner from './components/PdfDesigner.jsx';
 import Login from './components/Login.jsx';
 import { exportChecklistToExcel } from './utils/exportExcel.js';
 import { exportChecklistToPdf } from './utils/exportPdf.js';
@@ -147,6 +148,10 @@ function AppContent() {
 
         {view === 'expedientes' && (
           <EmployeeRecords />
+        )}
+
+        {view === 'designer' && isAdmin && (
+          <PdfDesigner onClose={() => setView('dashboard')} />
         )}
       </main>
 

@@ -50,6 +50,11 @@ export default function Navigation({ view, setView, checklistCount, isAdmin }) {
             {item.badge > 0 && <span className="nav-badge">{item.badge}</span>}
           </button>
         ))}
+        {isAdmin && (
+          <button className={`nav-item ${view === 'designer' ? 'active' : ''}`} onClick={() => setView('designer')}>
+            🎨 <span className="nav-label">Diseñador PDF</span>
+          </button>
+        )}
       </div>
     </nav>
   );
