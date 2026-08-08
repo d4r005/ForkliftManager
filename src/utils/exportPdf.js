@@ -8,14 +8,16 @@ import { supabase } from '../lib/supabase.js';
  */
 export async function exportChecklistToPdf(checklist, lang = 'es') {
   try {
-    const { data: { publicUrl } } = supabase.storage
+    // 1. Descargar la plantilla usando el cliente de Supabase (más seguro que fetch)
+    const { data: templateBlob, error: downloadError } = await supabase.storage
       .from('expedientes')
-      .getPublicUrl('templates/template.pdf');
+      .download('templates/template.pdf');
 
-    const templateBytes = await fetch(publicUrl).then(res => {
-      if (!res.ok) throw new Error('No se pudo descargar la plantilla desde Supabase.');
-      return res.arrayBuffer();
-    });
+    if (downloadError) {
+        throw new Error(`Error al descargar plantilla: ${downloadError.message}`);
+    }
+
+    const templateBytes = await templateBlob.arrayBuffer();
 
     const srcDoc = await PDFDocument.load(templateBytes);
     const pdfDoc = await PDFDocument.create();
@@ -46,10 +48,6 @@ export async function exportChecklistToPdf(checklist, lang = 'es') {
     const dateStr = `${checklist.day}/${checklist.month + 1}/${checklist.year}`;
     const fontSize = 10;
 
-    // --- COORDENADAS AJUSTADAS AL ESCALADO ---
-    // Nota: Como ahora la página es más grande, estas coordenadas base
-    // podrían necesitar un ajuste fino.
-
     const drawText = (text, x, y, size = fontSize) => {
         page.drawText(text || '', {
             x: x,
@@ -59,7 +57,7 @@ export async function exportChecklistToPdf(checklist, lang = 'es') {
         });
     };
 
-    // Encabezados
+    // Encabezados (Coordenadas aproximadas)
     drawText(checklist.forkliftId, 120, 680);
     drawText(checklist.operatorName, 380, 680);
     drawText(dateStr, 120, 665);
@@ -79,7 +77,7 @@ export async function exportChecklistToPdf(checklist, lang = 'es') {
           drawText('X', xOffset, yPos, 11);
         }
       }
-      yPos -= 16.2; // Espaciado ajustado para página más grande
+      yPos -= 16.2;
     });
 
     // Observaciones
