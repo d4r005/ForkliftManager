@@ -5,7 +5,13 @@ import { checklistItems } from '../data/checklistItems.js';
 import { exportChecklistToPdf } from '../utils/exportPdf.js';
 import * as pdfjsLib from 'pdfjs-dist';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
+// Worker empaquetado localmente por Vite (misma versión que la librería,
+// siempre en sync — evita el error "API version does not match Worker version"
+// que salía al usar una URL de CDN con un número de versión fijo).
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 
 export default function PdfDesigner({ onClose }) {
   const [config, setConfig] = useState(null);
