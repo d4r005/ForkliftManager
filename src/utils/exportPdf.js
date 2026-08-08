@@ -3,93 +3,77 @@ import { checklistItems } from '../data/checklistItems.js';
 import { translations } from '../i18n/translations.js';
 import { supabase } from '../lib/supabase.js';
 
-/**
- * Genera un PDF escribiendo directamente sobre la plantilla descargada.
- */
 export async function exportChecklistToPdf(checklist, lang = 'es') {
   try {
-    // 1. Descargar la plantilla desde Supabase
     const { data: templateBlob, error: downloadError } = await supabase.storage
       .from('expedientes')
       .download('templates/template.pdf');
 
-    if (downloadError) {
-        throw new Error(`Error al descargar plantilla: ${downloadError.message}`);
-    }
-
+    if (downloadError) throw new Error(`Error al descargar plantilla: ${downloadError.message}`);
     const templateBytes = await templateBlob.arrayBuffer();
 
-    // 2. Cargar el documento original (Escribiremos directamente en él)
     const pdfDoc = await PDFDocument.load(templateBytes);
-    const pages = pdfDoc.getPages();
-    const page = pages[0]; // Usamos la primera página directamente
-
+    const page = pdfDoc.getPages()[0];
     const { width, height } = page.getSize();
-    console.log('PDF Size:', width, height); // Para depuración en consola
 
-    // 3. Configuración de texto
-    const t = translations[lang] || translations.es;
-    const dateStr = `${checklist.day}/${checklist.month + 1}/${checklist.year}`;
-
-    // Función auxiliar para dibujar texto (Coordenadas relativas al tamaño del PDF)
-    const drawText = (text, x, y, size = 10) => {
+    const drawText = (text, x, y, size = 9) => {
         if (!text) return;
-        page.drawText(String(text), {
-            x: x,
-            y: y,
-            size: size,
-            color: rgb(0, 0, 0)
-        });
+        page.drawText(String(text), { x, y, size, color: rgb(0, 0, 0) });
     };
 
-    // --- COORDENADAS BASE (Ajustar si el texto sale fuera de lugar) ---
-    // Usamos coordenadas estándar. Si el PDF es pequeño, se verán grandes.
-    drawText(checklist.forkliftId, 100, height - 110);
-    drawText(checklist.operatorName, 350, height - 110);
-    drawText(dateStr, 100, height - 130);
-    drawText(checklist.inspectorName, 350, height - 130);
+    // --- 1. CABECERA (Ajustada a los recuadros blancos) ---
+    // Identificación del montacargas (MC01)
+    drawText(checklist.forkliftId, 110, height - 165, 11);
+    // Nombre del operador
+    drawText(checklist.operatorName, 380, height - 165, 10);
+    // Fecha (Día/Mes/Año)
+    drawText(`${checklist.day}/${checklist.month + 1}/${checklist.year}`, 110, height - 188, 10);
+    // Nombre de quien revisa
+    drawText(checklist.inspectorName, 380, height - 188, 10);
 
-    // 4. Checklist Items
-    let yPos = height - 180;
+    // --- 2. CHECKLIST (Las 'X') ---
+    // Calculamos la columna según el día del mes (1-31)
+    // El '1' empieza aproximadamente en x=238. Cada columna mide unos 9.2 puntos.
+    const xBaseColumn = 237.5;
+    const xColumn = xBaseColumn + ((checklist.day - 1) * 9.25);
+
+    // El primer item (Llantas) empieza en height - 250
+    let yPos = height - 250.5;
     checklistItems.forEach(item => {
       const rating = checklist.items?.[item.id];
-      if (rating) {
-        let xOffset = 0;
-        if (rating === 'SAT') xOffset = width - 150;
-        else if (rating === 'INS') xOffset = width - 115;
-        else if (rating === 'N/A') xOffset = width - 80;
-
-        if (xOffset > 0) {
-          drawText('X', xOffset, yPos, 11);
-        }
+      // Solo dibujamos si es SAT o INS (puedes cambiar la marca según el tipo si gustas)
+      if (rating && rating !== 'N/A') {
+        drawText('X', xColumn, yPos, 8);
+      } else if (rating === 'N/A') {
+        drawText('-', xColumn, yPos, 8);
       }
-      yPos -= 14.5; // Espaciado vertical entre líneas
+      yPos -= 14.05; // Salto de línea exacto para tus renglones
     });
 
-    // 5. Observaciones
+    // --- 3. PIE DE PÁGINA ---
+    // Nombre de quien revisa (abajo)
+    drawText(checklist.inspectorName, 180, height - 618, 9);
+    // Observaciones
     if (checklist.observations) {
       page.drawText(checklist.observations, {
-        x: 50,
-        y: 80,
-        size: 9,
-        maxWidth: width - 100,
-        lineHeight: 11,
+        x: 130,
+        y: height - 632,
+        size: 8,
+        maxWidth: width - 200,
+        lineHeight: 10,
       });
     }
 
-    // 6. Guardar y descargar
     const pdfBytes = await pdfDoc.save();
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
-
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Bitacora_${checklist.forkliftId}.pdf`;
+    link.download = `Bitacora_${checklist.forkliftId}_Dia_${checklist.day}.pdf`;
     link.click();
-
     setTimeout(() => URL.revokeObjectURL(url), 100);
   } catch (error) {
-    console.error('Error detallado:', error);
+    console.error('Error:', error);
     alert('Error al generar el PDF: ' + error.message);
   }
 }
