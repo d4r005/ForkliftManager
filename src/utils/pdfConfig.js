@@ -15,9 +15,11 @@ import { supabase } from '../lib/supabase.js';
  */
 const DEFAULT_CONFIG = {
   header: {
-    forkliftId: { x: 56, y: 471, size: 9 },
-    date: { x: 126, y: 471, size: 8.5 },
-    operatorName: { x: 186, y: 471, size: 9 },
+    // El renglón de "Identificación del montacargas" tiene solo ~9.4pt de
+    // espacio libre bajo su etiqueta (2 líneas), así que usa fuente más chica.
+    forkliftId: { x: 53, y: 470.4, size: 7 },
+    date: { x: 126, y: 474, size: 8 },
+    operatorName: { x: 186, y: 474, size: 8.5 },
   },
   checklist: {
     baseX: 195.2,
@@ -34,7 +36,8 @@ const DEFAULT_CONFIG = {
     deltaY: 12.82
   },
   footer: {
-    inspectorName: { x: 160, y: 188, size: 9 },
+    // La fila de "NOMBRE DE QUIEN REVISA" solo mide ~8pt de alto en el template.
+    inspectorName: { x: 164, y: 187.5, size: 6.5 },
     observations: { x: 120, y: 176, size: 7.5 }
   }
 };
