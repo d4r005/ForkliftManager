@@ -3,24 +3,39 @@ import { supabase } from '../lib/supabase.js';
 /**
  * Configuración de coordenadas para el PDF.
  * Ahora se sincroniza con Supabase.
+ *
+ * Calibrado contra el template real "templates/bitacora_v2.pdf"
+ * (US Letter horizontal, 792x612pt). Los 26 renglones del checklist
+ * NO tienen la misma altura (los renglones 1, 7 y 22 ocupan 2 líneas
+ * de texto porque su descripción es más larga), por lo que en vez de
+ * una fórmula lineal (baseY - index*deltaY) usamos un arreglo `itemY`
+ * con la coordenada Y exacta de cada uno de los 26 renglones. Las
+ * columnas de los días (1-31) sí son uniformes, por lo que baseX/deltaX
+ * siguen usando la fórmula lineal.
  */
 const DEFAULT_CONFIG = {
   header: {
-    forkliftId: { x: 50, y: 664, size: 10 },
-    date: { x: 148, y: 664, size: 8.5 },
-    operatorName: { x: 220, y: 664, size: 9 },
-    inspectorNameTop: { x: 380, y: 664, size: 9 },
+    forkliftId: { x: 56, y: 471, size: 9 },
+    date: { x: 126, y: 471, size: 8.5 },
+    operatorName: { x: 186, y: 471, size: 9 },
   },
   checklist: {
-    baseX: 222.8,
-    baseY: 600.0,
-    deltaX: 9.25,
-    deltaY: 12.82,
-    fontSize: 5
+    baseX: 195.2,
+    deltaX: 17.52,
+    fontSize: 5,
+    // Coordenada Y exacta por renglón (índice 0 = item id 1 ... índice 25 = item id 26)
+    itemY: [
+      434.8, 418.7, 410.9, 402.6, 394.1, 385.3, 376.2, 359.1, 350.1, 341.2,
+      332.5, 322.9, 312.6, 303.1, 292.9, 283.3, 275.3, 267.2, 259.2, 251.1,
+      243.1, 235.1, 219.5, 211.4, 203.4, 195.4
+    ],
+    // Fallback legacy por si algún config viejo no trae itemY
+    baseY: 434.8,
+    deltaY: 12.82
   },
   footer: {
-    inspectorName: { x: 175, y: 264, size: 9 },
-    observations: { x: 130, y: 250, size: 7.5 }
+    inspectorName: { x: 160, y: 188, size: 9 },
+    observations: { x: 120, y: 176, size: 7.5 }
   }
 };
 
@@ -53,3 +68,5 @@ export const savePdfConfig = async (config) => {
     throw error;
   }
 };
+
+export { DEFAULT_CONFIG };

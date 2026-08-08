@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase.js';
-import { getPdfConfig, savePdfConfig } from '../utils/pdfConfig.js';
+import { getPdfConfig, savePdfConfig, DEFAULT_CONFIG } from '../utils/pdfConfig.js';
 import { checklistItems } from '../data/checklistItems.js';
 import { exportChecklistToPdf } from '../utils/exportPdf.js';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -10,15 +10,31 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs
 export default function PdfDesigner({ onClose }) {
   const [config, setConfig] = useState(null);
   const [templateImg, setTemplateImg] = useState(null);
-  const [pdfSize, setPdfSize] = useState({ width: 842, height: 595 }); // Default A4 Landscape
+  const [pdfSize, setPdfSize] = useState({ width: 792, height: 612 }); // US Letter landscape
   const [loading, setLoading] = useState(true);
   const [zoom, setZoom] = useState(1.0);
   const [dragging, setDragging] = useState(null);
+  const [selectedRow, setSelectedRow] = useState(null);
 
   const testData = {
     forkliftId: 'MC-TEST', operatorName: 'OPERADOR PRUEBA', inspectorName: 'INSPECTOR PRUEBA',
     day: 1, month: 0, year: 2025, observations: 'ESTA ES UNA PRUEBA.',
-    items: { 1: 'SAT', 2: 'SAT', 3: 'SAT', 26: 'SAT' }
+    items: { 1: 'SAT', 2: 'SAT', 3: 'SAT', 7: 'SAT', 22: 'SAT', 26: 'SAT' }
+  };
+
+  // Helper: asegura que config.checklist.itemY sea un arreglo de 26 valores
+  const ensureItemY = (conf) => {
+    const ck = conf.checklist;
+    if (!Array.isArray(ck.itemY) || ck.itemY.length < 26) {
+      const itemY = [];
+      for (let i = 0; i < 26; i++) {
+        itemY.push(ck.itemY && ck.itemY[i] !== undefined
+          ? ck.itemY[i]
+          : (ck.baseY || 434.8) - i * (ck.deltaY || 12.82));
+      }
+      return { ...conf, checklist: { ...ck, itemY } };
+    }
+    return conf;
   };
 
   useEffect(() => {
@@ -39,17 +55,19 @@ export default function PdfDesigner({ onClose }) {
         await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
         setTemplateImg(canvas.toDataURL());
 
-        // Si la config guardada tiene valores de una hoja vertical, intentamos resetear a horizontal
-        if (conf.checklist.baseY > realSize.height) {
-            conf.header.forkliftId.y = 465; conf.header.date.y = 465; conf.header.operatorName.y = 465;
-            conf.checklist.baseY = 405; conf.footer.inspectorName.y = 65;
-        }
-
-        setConfig(conf);
+        // Migrar config vieja: si no trae itemY, generar el arreglo
+        const migrated = ensureItemY(conf);
+        setConfig(migrated);
         setLoading(false);
       } catch (err) { alert(err.message); }
     })();
   }, []);
+
+  const getItemY = (index) => {
+    const ck = config.checklist;
+    if (Array.isArray(ck.itemY) && ck.itemY[index] !== undefined) return ck.itemY[index];
+    return (ck.baseY || 434.8) - index * (ck.deltaY || 12.82);
+  };
 
   const handleMouseMove = (e) => {
     if (!dragging) return;
@@ -60,12 +78,25 @@ export default function PdfDesigner({ onClose }) {
     const x = Math.round(((e.clientX - rect.left) / zoom) * 10) / 10;
     const y = Math.round((pdfSize.height - ((e.clientY - rect.top) / zoom)) * 10) / 10;
 
-    const newConf = { ...config };
+    const newConf = { ...config, checklist: { ...config.checklist } };
+
     if (dragging.path === 'checklist') {
-        newConf.checklist.baseX = x; newConf.checklist.baseY = y;
+        // Mover el primer renglón (baseX/baseY) — arrastra toda la grilla
+        const deltaY = y - newConf.checklist.itemY[0];
+        const deltaX = x - newConf.checklist.baseX;
+        newConf.checklist.baseX = x;
+        newConf.checklist.itemY = newConf.checklist.itemY.map((yVal, i) =>
+          Math.round((yVal + deltaY) * 10) / 10
+        );
+    } else if (dragging.path.startsWith('row.')) {
+        // Mover un renglón individual
+        const rowIdx = parseInt(dragging.path.split('.')[1], 10);
+        newConf.checklist.itemY = [...newConf.checklist.itemY];
+        newConf.checklist.itemY[rowIdx] = y;
     } else {
         const [p1, p2] = dragging.path.split('.');
-        newConf[p1][p2].x = x; newConf[p1][p2].y = y;
+        newConf[p1] = { ...newConf[p1] };
+        newConf[p1][p2] = { ...newConf[p1][p2], x, y };
     }
     setConfig(newConf);
   };
@@ -73,19 +104,24 @@ export default function PdfDesigner({ onClose }) {
   if (loading) return <div className="loading-screen">Detectando formato...</div>;
 
   return (
-    <div className="pdf-designer" onMouseMove={handleMouseMove} onMouseUp={() => setDragging(null)}>
+    <div className="pdf-designer" onMouseMove={handleMouseMove} onMouseUp={() => { setDragging(null); setSelectedRow(null); }}>
       <div className="designer-toolbar">
         <div className="toolbar-group">
           <strong>📐 {pdfSize.width > pdfSize.height ? 'Horizontal' : 'Vertical'} ({pdfSize.width}x{pdfSize.height})</strong>
           <button className="btn btn-primary" onClick={() => savePdfConfig(config).then(() => alert('Guardado!'))}>💾 Guardar Todo</button>
           <button className="btn btn-secondary" onClick={() => exportChecklistToPdf(testData, 'es', config)}>📄 Probar PDF Actual</button>
+          <button className="btn btn-sm" onClick={() => { setConfig(ensureItemY(DEFAULT_CONFIG)); }}>↩️ Reset Default</button>
         </div>
         <div className="toolbar-controls">
           <div className="control-item"><label>Zoom</label><input type="range" min="0.5" max="1.5" step="0.1" value={zoom} onChange={e=>setZoom(parseFloat(e.target.value))} /></div>
-          <div className="control-item"><label>Espaciado Día</label><input type="number" step="0.01" value={config.checklist.deltaX} onChange={e=>setConfig({...config, checklist:{...config.checklist, deltaX: parseFloat(e.target.value)}})} /></div>
-          <div className="control-item"><label>Espaciado Item</label><input type="number" step="0.01" value={config.checklist.deltaY} onChange={e=>setConfig({...config, checklist:{...config.checklist, deltaY: parseFloat(e.target.value)}})} /></div>
+          <div className="control-item"><label>Espaciado Día (ΔX)</label><input type="number" step="0.01" value={config.checklist.deltaX} onChange={e=>setConfig({...config, checklist:{...config.checklist, deltaX: parseFloat(e.target.value)}})} /></div>
+          <div className="control-item"><label>Font Size</label><input type="number" step="0.5" value={config.checklist.fontSize} onChange={e=>setConfig({...config, checklist:{...config.checklist, fontSize: parseFloat(e.target.value)}})} /></div>
           <button className="btn btn-sm" onClick={onClose}>X</button>
         </div>
+      </div>
+
+      <div className="designer-toolbar" style={{background:'#1a1a1a', padding:'6px 10px', fontSize:'10px', color:'#888'}}>
+        <span>💡 Arrastra el recuadro verde para mover toda la grilla. Arrastra cualquier renglón rojo para ajustar su Y individualmente.</span>
       </div>
 
       <div className="designer-canvas-wrap">
@@ -99,15 +135,30 @@ export default function PdfDesigner({ onClose }) {
           <DragBox label="👤 OPERADOR" path="header.operatorName" val={config.header.operatorName} zoom={zoom} h={pdfSize.height} onDown={setDragging} />
           <DragBox label="✍️ FIRMA" path="footer.inspectorName" val={config.footer.inspectorName} zoom={zoom} h={pdfSize.height} onDown={setDragging} />
 
+          {/* Caja verde: baseX + renglón 0 — arrastra toda la grilla */}
           <div className="drag-box checklist-ref" style={{
-              left: config.checklist.baseX * zoom, top: (pdfSize.height - config.checklist.baseY) * zoom,
-              width: config.checklist.deltaX * zoom, height: config.checklist.deltaY * zoom
-          }} onMouseDown={()=>setDragging({path:'checklist'})}>SAT</div>
+              left: config.checklist.baseX * zoom, top: (pdfSize.height - getItemY(0)) * zoom,
+              width: config.checklist.deltaX * zoom, height: 14 * zoom
+          }} onMouseDown={(e)=>{e.preventDefault(); setDragging({path:'checklist'});}}>STA</div>
 
+          {/* Un handle rojo por cada uno de los 26 renglones — arrastra Y individual */}
+          {checklistItems.map((item, i) => {
+            const yVal = getItemY(i);
+            return (
+              <div key={`row-${i}`} className="row-handle" style={{
+                  left: (config.checklist.baseX - 12) * zoom,
+                  top: (pdfSize.height - yVal) * zoom,
+              }} onMouseDown={(e)=>{e.preventDefault(); setDragging({path:`row.${i}`}); setSelectedRow(i);}}
+              title={`Renglón ${i+1} (Y=${yVal})`}
+              >{i+1}</div>
+            );
+          })}
+
+          {/* Puntos guia: intersección día x renglón usando itemY exacto */}
           {[...Array(31)].map((_, d) => checklistItems.map((_, i) => (
             <div key={`${d}-${i}`} className="guide-dot" style={{
                 left: (config.checklist.baseX + (d * config.checklist.deltaX)) * zoom + 3,
-                top: (pdfSize.height - (config.checklist.baseY - (i * config.checklist.deltaY))) * zoom + 3
+                top: (pdfSize.height - getItemY(i)) * zoom + 3
             }} />
           )))}
         </div>
@@ -123,6 +174,8 @@ export default function PdfDesigner({ onClose }) {
         .designer-canvas { background: white; box-shadow: 0 0 40px #000; }
         .drag-box { position: absolute; padding: 1px 4px; background: rgba(0, 123, 255, 0.3); border: 1px solid #007bff; color: #000; font-weight: bold; font-size: 10px; cursor: move; white-space: nowrap; user-select: none; }
         .checklist-ref { background: rgba(40, 167, 69, 0.4); border-color: #28a745; z-index: 100; display: flex; align-items: center; justify-content: center; }
+        .row-handle { position: absolute; width: 18px; height: 14px; background: rgba(220, 53, 69, 0.5); border: 1px solid #dc3545; color: #fff; font-size: 7px; font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: ns-resize; user-select: none; z-index: 50; }
+        .row-handle:hover { background: rgba(220, 53, 69, 0.9); }
         .guide-dot { position: absolute; width: 3px; height: 3px; background: red; border-radius: 50%; opacity: 0.3; pointer-events: none; }
       `}</style>
     </div>

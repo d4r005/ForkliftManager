@@ -38,14 +38,20 @@ export async function exportChecklistToPdf(checklist, lang = 'es', overrideConfi
     drawText(checklist.operatorName, h.operatorName.x, h.operatorName.y, h.operatorName.size);
 
     // --- CHECKLIST ---
-    const { baseX, baseY, deltaX, deltaY, fontSize } = config.checklist;
+    const { baseX, deltaX, fontSize, itemY, baseY, deltaY } = config.checklist;
     const xColumn = baseX + ((checklist.day - 1) * deltaX);
 
     checklistItems.forEach((item, index) => {
       const rating = checklist.items?.[item.id];
       if (rating) {
-        // Calculamos Y restando el desplazamiento del índice
-        const yPosItem = baseY - (index * deltaY);
+        // Preferimos la coordenada Y exacta por renglón (itemY). Los renglones
+        // del checklist NO tienen todos la misma altura (algunos ocupan 2
+        // líneas de texto), así que una fórmula lineal se desalinea después
+        // de esos renglones. Si no hay itemY (config viejo), caemos a la
+        // fórmula lineal por compatibilidad.
+        const yPosItem = Array.isArray(itemY) && itemY[index] !== undefined
+          ? itemY[index]
+          : baseY - (index * deltaY);
         drawText(rating, xColumn, yPosItem, fontSize || 5);
       }
     });
