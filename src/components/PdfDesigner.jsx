@@ -2,32 +2,52 @@ import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase.js';
 import { getPdfConfig, savePdfConfig } from '../utils/pdfConfig.js';
 import { checklistItems } from '../data/checklistItems.js';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Configurar el worker de PDF.js (usando CDN para simplicidad en web)
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 export default function PdfDesigner({ onClose }) {
   const [config, setConfig] = useState(null);
-  const [templateUrl, setTemplateUrl] = useState(null);
+  const [templateImg, setTemplateImg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [zoom, setZoom] = useState(1.5);
+  const [zoom, setZoom] = useState(1.2);
 
   const containerRef = useRef(null);
   const [dragging, setDragging] = useState(null);
 
   useEffect(() => {
     (async () => {
-      const [conf, { data }] = await Promise.all([
-        getPdfConfig(),
-        supabase.storage.from('expedientes').getPublicUrl('templates/bitacora_v2.pdf')
-      ]);
+      try {
+        const [conf, { data: signed }] = await Promise.all([
+          getPdfConfig(),
+          supabase.storage.from('expedientes').createSignedUrl('templates/bitacora_v2.pdf', 3600)
+        ]);
 
-      // Intentamos obtener una URL firmada si la pública falla o tiene problemas de CORS
-      const { data: signed } = await supabase.storage
-        .from('expedientes')
-        .createSignedUrl('templates/bitacora_v2.pdf', 3600);
+        if (!signed?.signedUrl) throw new Error('No se pudo obtener la URL del PDF');
 
-      setConfig(conf);
-      setTemplateUrl(signed?.signedUrl || data.publicUrl);
-      setLoading(false);
+        // Cargar y renderizar PDF a Imagen
+        const loadingTask = pdfjsLib.getDocument(signed.signedUrl);
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(1);
+
+        const viewport = page.getViewport({ scale: 2 }); // Alta resolución para el diseño
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        await page.render({ canvasContext: context, viewport }).promise;
+        setTemplateImg(canvas.toDataURL());
+
+        setConfig(conf);
+        setLoading(false);
+      } catch (err) {
+        console.error('Error loading designer:', err);
+        alert('Error al cargar la plantilla: ' + err.message);
+        setLoading(false);
+      }
     })();
   }, []);
 
@@ -88,7 +108,7 @@ export default function PdfDesigner({ onClose }) {
     setSaving(false);
   };
 
-  if (loading) return <div className="loading-screen">Cargando configuración...</div>;
+  if (loading) return <div className="loading-screen">Generando vista previa del PDF...</div>;
 
   return (
     <div className="pdf-designer" onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
@@ -108,10 +128,11 @@ export default function PdfDesigner({ onClose }) {
         <div className="designer-canvas" style={{
             width: 612 * zoom,
             height: 792 * zoom,
-            backgroundImage: `url(${templateUrl})`,
+            backgroundImage: `url(${templateImg})`,
             backgroundSize: '100% 100%',
             position: 'relative',
-            border: '2px solid #333'
+            border: '2px solid #333',
+            backgroundRepeat: 'no-repeat'
         }}>
 
           <DraggableBox label="ID" path="header.forkliftId" config={config.header.forkliftId} zoom={zoom} onDown={handleMouseDown} />
