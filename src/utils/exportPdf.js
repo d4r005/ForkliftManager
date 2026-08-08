@@ -1,24 +1,21 @@
 import { PDFDocument, rgb } from 'pdf-lib';
 import { checklistItems } from '../data/checklistItems.js';
-import { translations } from '../i18n/translations.js';
 import { supabase } from '../lib/supabase.js';
 import { getPdfConfig } from './pdfConfig.js';
 
 /**
- * Genera el PDF de la bitácora usando coordenadas dinámicas de Supabase.
- * VERSION: 11 - Sin escalado, sin drawPage, solo escritura directa.
+ * Genera el PDF.
+ * overrideConfig permite al Diseñador probar cambios sin guardar en DB.
  */
-export async function exportChecklistToPdf(checklist, lang = 'es') {
-  console.log('Iniciando generación de PDF v11...');
+export async function exportChecklistToPdf(checklist, lang = 'es', overrideConfig = null) {
   try {
-    const config = await getPdfConfig();
-    console.log('Configuración cargada:', config);
+    const config = overrideConfig || await getPdfConfig();
 
     const { data: templateBlob, error: downloadError } = await supabase.storage
       .from('expedientes')
       .download('templates/bitacora_v2.pdf');
 
-    if (downloadError) throw new Error(`No se encontró la plantilla en Supabase: ${downloadError.message}`);
+    if (downloadError) throw new Error(`Error: ${downloadError.message}`);
 
     const templateBytes = await templateBlob.arrayBuffer();
     const pdfDoc = await PDFDocument.load(templateBytes);
@@ -27,36 +24,37 @@ export async function exportChecklistToPdf(checklist, lang = 'es') {
 
     const drawText = (text, x, y, size = 9) => {
         if (text === undefined || text === null || text === '') return;
+        // pdf-lib usa (0,0) abajo a la izquierda.
         page.drawText(String(text), { x, y, size, color: rgb(0, 0, 0) });
     };
 
-    // Cabecera
-    drawText(checklist.forkliftId, config.header.forkliftId.x, config.header.forkliftId.y, config.header.forkliftId.size);
-    drawText(`${checklist.day}/${checklist.month + 1}/${checklist.year}`, config.header.date.x, config.header.date.y, config.header.date.size);
-    drawText(checklist.operatorName, config.header.operatorName.x, config.header.operatorName.y, config.header.operatorName.size);
+    // --- CABECERA ---
+    const h = config.header;
+    drawText(checklist.forkliftId, h.forkliftId.x, h.forkliftId.y, h.forkliftId.size);
+    drawText(`${checklist.day}/${checklist.month + 1}/${checklist.year}`, h.date.x, h.date.y, h.date.size);
+    drawText(checklist.operatorName, h.operatorName.x, h.operatorName.y, h.operatorName.size);
 
-    // Checklist
-    const { baseX, baseY, deltaX, deltaY, fontSize: checkSize } = config.checklist;
+    // --- CHECKLIST ---
+    const { baseX, baseY, deltaX, deltaY, fontSize } = config.checklist;
     const xColumn = baseX + ((checklist.day - 1) * deltaX);
 
-    let yPos = baseY;
+    let yPosCurrent = baseY;
     checklistItems.forEach(item => {
       const rating = checklist.items?.[item.id];
       if (rating) {
-        drawText(rating, xColumn, yPos + 1.5, checkSize || 5);
+        // Escribimos SAT/INS centrado un poco
+        drawText(rating, xColumn, yPosCurrent, fontSize || 5);
       }
-      yPos -= deltaY;
+      yPosCurrent -= deltaY; // Bajamos en el PDF (restando Y)
     });
 
-    // Pie
-    drawText(checklist.inspectorName, config.footer.inspectorName.x, config.footer.inspectorName.y, config.footer.inspectorName.size);
+    // --- PIE ---
+    const f = config.footer;
+    drawText(checklist.inspectorName, f.inspectorName.x, f.inspectorName.y, f.inspectorName.size);
     if (checklist.observations) {
       page.drawText(checklist.observations, {
-        x: config.footer.observations.x,
-        y: config.footer.observations.y,
-        size: config.footer.observations.size,
-        maxWidth: width - 200,
-        lineHeight: 9,
+        x: f.observations.x, y: f.observations.y,
+        size: f.observations.size, maxWidth: width - 200, lineHeight: 10
       });
     }
 
@@ -65,11 +63,11 @@ export async function exportChecklistToPdf(checklist, lang = 'es') {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Bitacora_${checklist.forkliftId}_D${checklist.day}.pdf`;
+    link.download = `Bitacora_Prueba.pdf`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 100);
   } catch (error) {
-    console.error('Error crítico en PDF:', error);
-    alert('Error al generar PDF: ' + error.message);
+    console.error('PDF Error:', error);
+    alert('Error: ' + error.message);
   }
 }
