@@ -1,14 +1,14 @@
 import { PDFDocument, rgb } from 'pdf-lib';
-import { checklistItems, ratingOptions } from '../data/checklistItems.js';
+import { checklistItems } from '../data/checklistItems.js';
 import { translations } from '../i18n/translations.js';
 import { supabase } from '../lib/supabase.js';
 
 /**
- * Genera un PDF basado en una plantilla en Supabase, escalándola para llenar la página.
+ * Genera un PDF escribiendo directamente sobre la plantilla descargada.
  */
 export async function exportChecklistToPdf(checklist, lang = 'es') {
   try {
-    // 1. Descargar la plantilla usando el cliente de Supabase (más seguro que fetch)
+    // 1. Descargar la plantilla desde Supabase
     const { data: templateBlob, error: downloadError } = await supabase.storage
       .from('expedientes')
       .download('templates/template.pdf');
@@ -19,37 +19,22 @@ export async function exportChecklistToPdf(checklist, lang = 'es') {
 
     const templateBytes = await templateBlob.arrayBuffer();
 
-    const srcDoc = await PDFDocument.load(templateBytes);
-    const pdfDoc = await PDFDocument.create();
+    // 2. Cargar el documento original (Escribiremos directamente en él)
+    const pdfDoc = await PDFDocument.load(templateBytes);
+    const pages = pdfDoc.getPages();
+    const page = pages[0]; // Usamos la primera página directamente
 
-    // Tamaño estándar Carta (Letter) en puntos: 612 x 792
-    const PAGE_WIDTH = 612;
-    const PAGE_HEIGHT = 792;
+    const { width, height } = page.getSize();
+    console.log('PDF Size:', width, height); // Para depuración en consola
 
-    const [srcPage] = await pdfDoc.copyPages(srcDoc, [0]);
-    const { width: srcWidth, height: srcHeight } = srcPage.getSize();
-
-    // Crear una nueva página tamaño Carta
-    const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-
-    // Calcular escala para que ocupe el 95% del ancho de la hoja
-    const scale = (PAGE_WIDTH * 0.95) / srcWidth;
-
-    // Dibujar la página original escalada y centrada
-    page.drawPage(srcPage, {
-      x: (PAGE_WIDTH - srcWidth * scale) / 2,
-      y: (PAGE_HEIGHT - srcHeight * scale) / 2,
-      width: srcWidth * scale,
-      height: srcHeight * scale,
-    });
-
-    // Configuración de dibujo
+    // 3. Configuración de texto
     const t = translations[lang] || translations.es;
     const dateStr = `${checklist.day}/${checklist.month + 1}/${checklist.year}`;
-    const fontSize = 10;
 
-    const drawText = (text, x, y, size = fontSize) => {
-        page.drawText(text || '', {
+    // Función auxiliar para dibujar texto (Coordenadas relativas al tamaño del PDF)
+    const drawText = (text, x, y, size = 10) => {
+        if (!text) return;
+        page.drawText(String(text), {
             x: x,
             y: y,
             size: size,
@@ -57,52 +42,54 @@ export async function exportChecklistToPdf(checklist, lang = 'es') {
         });
     };
 
-    // Encabezados (Coordenadas aproximadas)
-    drawText(checklist.forkliftId, 120, 680);
-    drawText(checklist.operatorName, 380, 680);
-    drawText(dateStr, 120, 665);
-    drawText(checklist.inspectorName, 380, 665);
+    // --- COORDENADAS BASE (Ajustar si el texto sale fuera de lugar) ---
+    // Usamos coordenadas estándar. Si el PDF es pequeño, se verán grandes.
+    drawText(checklist.forkliftId, 100, height - 110);
+    drawText(checklist.operatorName, 350, height - 110);
+    drawText(dateStr, 100, height - 130);
+    drawText(checklist.inspectorName, 350, height - 130);
 
-    // Checklist Items
-    let yPos = 610;
+    // 4. Checklist Items
+    let yPos = height - 180;
     checklistItems.forEach(item => {
       const rating = checklist.items?.[item.id];
       if (rating) {
         let xOffset = 0;
-        if (rating === 'SAT') xOffset = 470;
-        else if (rating === 'INS') xOffset = 505;
-        else if (rating === 'N/A') xOffset = 540;
+        if (rating === 'SAT') xOffset = width - 150;
+        else if (rating === 'INS') xOffset = width - 115;
+        else if (rating === 'N/A') xOffset = width - 80;
 
         if (xOffset > 0) {
           drawText('X', xOffset, yPos, 11);
         }
       }
-      yPos -= 16.2;
+      yPos -= 14.5; // Espaciado vertical entre líneas
     });
 
-    // Observaciones
+    // 5. Observaciones
     if (checklist.observations) {
       page.drawText(checklist.observations, {
-        x: 60,
-        y: 120,
+        x: 50,
+        y: 80,
         size: 9,
-        maxWidth: 500,
-        lineHeight: 12,
+        maxWidth: width - 100,
+        lineHeight: 11,
       });
     }
 
+    // 6. Guardar y descargar
     const pdfBytes = await pdfDoc.save();
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Bitacora_${checklist.forkliftId}_${checklist.year}_${checklist.month + 1}.pdf`;
+    link.download = `Bitacora_${checklist.forkliftId}.pdf`;
     link.click();
 
     setTimeout(() => URL.revokeObjectURL(url), 100);
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error detallado:', error);
     alert('Error al generar el PDF: ' + error.message);
   }
 }
