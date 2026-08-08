@@ -19,8 +19,14 @@ export default function PdfDesigner({ onClose }) {
         getPdfConfig(),
         supabase.storage.from('expedientes').getPublicUrl('templates/bitacora_v2.pdf')
       ]);
+
+      // Intentamos obtener una URL firmada si la pública falla o tiene problemas de CORS
+      const { data: signed } = await supabase.storage
+        .from('expedientes')
+        .createSignedUrl('templates/bitacora_v2.pdf', 3600);
+
       setConfig(conf);
-      setTemplateUrl(`${data.publicUrl}?t=${Date.now()}`);
+      setTemplateUrl(signed?.signedUrl || data.publicUrl);
       setLoading(false);
     })();
   }, []);
