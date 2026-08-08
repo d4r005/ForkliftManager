@@ -21,39 +21,29 @@ export async function exportChecklistToPdf(checklist, lang = 'es') {
         page.drawText(String(text), { x, y, size, color: rgb(0, 0, 0) });
     };
 
-    // --- 1. CABECERA (Ajustada a los recuadros blancos) ---
-    // Identificación del montacargas (MC01)
+    // --- 1. CABECERA ---
     drawText(checklist.forkliftId, 110, height - 165, 11);
-    // Nombre del operador
     drawText(checklist.operatorName, 380, height - 165, 10);
-    // Fecha (Día/Mes/Año)
     drawText(`${checklist.day}/${checklist.month + 1}/${checklist.year}`, 110, height - 188, 10);
-    // Nombre de quien revisa
     drawText(checklist.inspectorName, 380, height - 188, 10);
 
-    // --- 2. CHECKLIST (Las 'X') ---
-    // Calculamos la columna según el día del mes (1-31)
-    // El '1' empieza aproximadamente en x=238. Cada columna mide unos 9.2 puntos.
-    const xBaseColumn = 237.5;
+    // --- 2. CHECKLIST (SAT / INS / N/A) ---
+    // xBaseColumn ajustado para centrar texto de 3 letras
+    const xBaseColumn = 236.2;
     const xColumn = xBaseColumn + ((checklist.day - 1) * 9.25);
 
-    // El primer item (Llantas) empieza en height - 250
     let yPos = height - 250.5;
     checklistItems.forEach(item => {
       const rating = checklist.items?.[item.id];
-      // Solo dibujamos si es SAT o INS (puedes cambiar la marca según el tipo si gustas)
-      if (rating && rating !== 'N/A') {
-        drawText('X', xColumn, yPos, 8);
-      } else if (rating === 'N/A') {
-        drawText('-', xColumn, yPos, 8);
+      if (rating) {
+        // Escribimos SAT, INS o N/A con fuente pequeña para que quepa en el cuadro
+        drawText(rating, xColumn, yPos + 1.5, 5.5);
       }
-      yPos -= 14.05; // Salto de línea exacto para tus renglones
+      yPos -= 14.05;
     });
 
     // --- 3. PIE DE PÁGINA ---
-    // Nombre de quien revisa (abajo)
     drawText(checklist.inspectorName, 180, height - 618, 9);
-    // Observaciones
     if (checklist.observations) {
       page.drawText(checklist.observations, {
         x: 130,
