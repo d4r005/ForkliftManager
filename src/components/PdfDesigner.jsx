@@ -4,8 +4,9 @@ import { getPdfConfig, savePdfConfig } from '../utils/pdfConfig.js';
 import { checklistItems } from '../data/checklistItems.js';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configurar el worker de PDF.js (usando CDN para simplicidad en web)
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Usar el worker integrado de la librería para evitar problemas de CORS/Fetch
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.entry';
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export default function PdfDesigner({ onClose }) {
   const [config, setConfig] = useState(null);
