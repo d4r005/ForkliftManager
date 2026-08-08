@@ -5,12 +5,14 @@ import { supabase } from '../lib/supabase.js';
 
 export async function exportChecklistToPdf(checklist, lang = 'es') {
   try {
-    const { data: templateBlob, error: downloadError } = await supabase.storage
-      .from('expedientes')
-      .download('templates/template.pdf');
+    // Obtenemos la URL pública y añadimos un timestamp para saltar el caché (?t=123456)
+    const { data } = supabase.storage.from('expedientes').getPublicUrl('templates/template.pdf');
+    const freshUrl = `${data.publicUrl}?t=${Date.now()}`;
 
-    if (downloadError) throw new Error(`Error al descargar plantilla: ${downloadError.message}`);
-    const templateBytes = await templateBlob.arrayBuffer();
+    // Descargamos usando fetch con modo 'no-cache'
+    const response = await fetch(freshUrl, { cache: 'no-store' });
+    if (!response.ok) throw new Error('No se pudo descargar la plantilla.');
+    const templateBytes = await response.arrayBuffer();
 
     const pdfDoc = await PDFDocument.load(templateBytes);
     const page = pdfDoc.getPages()[0];
@@ -21,14 +23,13 @@ export async function exportChecklistToPdf(checklist, lang = 'es') {
         page.drawText(String(text), { x, y, size, color: rgb(0, 0, 0) });
     };
 
-    // --- 1. CABECERA ---
+    // --- CABECERA ---
     drawText(checklist.forkliftId, 110, height - 165, 11);
     drawText(checklist.operatorName, 380, height - 165, 10);
     drawText(`${checklist.day}/${checklist.month + 1}/${checklist.year}`, 110, height - 188, 10);
     drawText(checklist.inspectorName, 380, height - 188, 10);
 
-    // --- 2. CHECKLIST (SAT / INS / N/A) ---
-    // xBaseColumn ajustado para centrar texto de 3 letras
+    // --- CHECKLIST ---
     const xBaseColumn = 236.2;
     const xColumn = xBaseColumn + ((checklist.day - 1) * 9.25);
 
@@ -36,13 +37,12 @@ export async function exportChecklistToPdf(checklist, lang = 'es') {
     checklistItems.forEach(item => {
       const rating = checklist.items?.[item.id];
       if (rating) {
-        // Escribimos SAT, INS o N/A con fuente pequeña para que quepa en el cuadro
         drawText(rating, xColumn, yPos + 1.5, 5.5);
       }
       yPos -= 14.05;
     });
 
-    // --- 3. PIE DE PÁGINA ---
+    // --- PIE ---
     drawText(checklist.inspectorName, 180, height - 618, 9);
     if (checklist.observations) {
       page.drawText(checklist.observations, {
