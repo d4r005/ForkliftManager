@@ -8,9 +8,11 @@
   },
   "plugins": {
     "SplashScreen": {
-      "launchShowDuration": 1500,
+      "launchShowDuration": 1000,
+      "launchAutoHide": true,
       "backgroundColor": "#FFFFFF",
-      "showSpinner": false
+      "showSpinner": false,
+      "androidScaleType": "CENTER_CROP"
     },
     "CapacitorHttp": {
       "enabled": true
@@ -19,6 +21,6 @@
   "android": {
     "allowMixedContent": false,
     "captureInput": true,
-    "webContentsDebuggingEnabled": false
+    "webContentsDebuggingEnabled": true
   }
 }
