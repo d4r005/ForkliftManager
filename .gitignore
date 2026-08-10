@@ -29,3 +29,9 @@ npm-debug.log*
 
 # Wrangler
 .wrangler/
+
+# Keystore credentials (local only)
+android/keystore.properties
+
+# Keystore file (local only — sensitive)
+montacontrol-release.keystore
