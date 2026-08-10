@@ -215,18 +215,16 @@ export async function exportChecklistToPdf(checklist) {
   const col2W = CONCEPT_W - col1AreaW - 8;
   const monthIdx = checklist.month ?? new Date().getMonth();
 
-  // NOTA: antes esta etiqueta + el ID iban concatenados en un solo string
-  // pasado a textWrapped(maxLines=2). La etiqueta bilingüe por sí sola ya
-  // ocupa las 2 líneas permitidas dentro de col1W, así que el ID quedaba
-  // recortado por wrapTokens/slice(0, maxLines) y nunca se dibujaba (bug:
-  // el PDF salía con "Identificación del montacargas" vacío). Un segundo
-  // intento angostó demasiado la columna y ahora ni la ETIQUETA cabía
-  // completa (salía "Identificación del" y se perdía "montacargas 叉车编号:").
-  // Fix definitivo: se ensanchó col1 (a costa de Mes, que sobra de espacio)
-  // para que la etiqueta quepa en 1 sola línea, y el ID se dibuja debajo en
-  // su propia línea, en fuente grande, para que siempre sea visible.
+  // Estructura calcada del Excel original: la ETIQUETA va en su propia
+  // fila (sin ':') y el VALOR debajo, tanto para Identificación como para
+  // Mes -- no van pegados con ':' en el mismo renglon (eso solo aplica a
+  // "Nombre del operador", que en el Excel si es una sola celda "Etiqueta:
+  // valor"). Un fix anterior angosto demasiado la columna y la ETIQUETA se
+  // cortaba a la mitad ("Identificación del" sin "montacargas 叉车编号"); se
+  // ensancho col1 (a costa de Mes, que sobraba espacio) para que la etiqueta
+  // quepa en 1 sola linea, con el valor debajo en fuente grande.
   textWrapped(
-    'Identificación del montacargas 叉车编号:',
+    'Identificación del montacargas 叉车编号',
     MARGIN + 4, y, col1W, s4H * 0.4, 5.5, true, C_BLACK, 1.1, 1
   );
   textRow(
@@ -234,8 +232,12 @@ export async function exportChecklistToPdf(checklist) {
     MARGIN + 4, y + s4H * 0.42, s4H * 0.58, 11, true, C_BLACK, 'left'
   );
   textWrapped(
-    `Mes 月: ${MONTHS_ES[monthIdx] || ''} ${MONTHS_ZH[monthIdx] || ''} ${checklist.year || ''}`.trim(),
-    midX + 4, y, col2W, s4H, 6, true, C_BLACK, 1.15, 2
+    'Mes 月',
+    midX + 4, y, col2W, s4H * 0.32, 6, true, C_BLACK, 1.1, 1
+  );
+  textWrapped(
+    `${MONTHS_ES[monthIdx] || ''} ${MONTHS_ZH[monthIdx] || ''} ${checklist.year || ''}`.trim(),
+    midX + 4, y + s4H * 0.34, col2W, s4H * 0.66, 8, true, C_BLACK, 1.15, 2
   );
   textWrapped(
     `Nombre del operador 操作员姓名: ${checklist.operatorName || ''}`,
@@ -251,7 +253,8 @@ export async function exportChecklistToPdf(checklist) {
 
   // --- Sección 5: Instrucciones (bilingüe, puede envolver 2 líneas) ---
   const s5H = 20;
-  const instrText = 'Instrucciones 说明: Marque todos los renglones indicados. 请勾选所有检查项目。 SAT: Satisfactorio 格, INS: Insatisfactorio 不合格, N/A: No Aplica 不适用。';
+  // Texto completo tal cual el formato oficial en Excel (antes se omitia la ultima oracion sobre comentarios adicionales).
+  const instrText = 'Instrucciones 说明: Marque todos los renglones indicados. 请勾选所有检查项目。 SAT: Satisfactorio 格, INS: Insatisfactorio 不合格, N/A: No Aplica 不适用。. En caso de cualquier comentario adicional utilice la parte final del formato 如有其他注. 请填写在表格末尾';
   textWrapped(instrText, MARGIN + 4, y, PAGE_W - 2 * MARGIN - 8, s5H, 6, true, C_BLACK, 1.15, 2);
   hline(MARGIN, PAGE_W - MARGIN, y, C_BLACK, 0.5);
   hline(MARGIN, PAGE_W - MARGIN, y + s5H, C_BLACK, 0.5);
