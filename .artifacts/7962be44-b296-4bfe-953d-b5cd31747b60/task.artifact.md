@@ -1,4 +1,5 @@
-- [x] Configurar firma en `android/app/build.gradle`
-- [x] Restaurar Gradle Wrapper (`gradlew`)
-- [x] Ejecutar compilación web y sincronización
-- [x] Generar APK Release firmado
+- [x] Corregir ruta de carga en `MainActivity.java` (Android)
+- [x] Implementar visibilidad global para Supervisor y Admin en `useStore.js`
+- [x] Actualizar instrucciones en `android/README.md`
+- [x] Generar nuevo APK Release firmado
+- [/] Realizar commit y push de los cambios

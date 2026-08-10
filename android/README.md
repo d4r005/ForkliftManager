@@ -12,7 +12,7 @@ ForkliftManager/
 │   │   ├── src/main/
 │   │   │   ├── java/com/shelser/montacontrol/
 │   │   │   │   └── MainActivity.java
-│   │   │   ├── assets/web/  # Build web copiado aquí al compilar
+│   │   │   ├── assets/public/  # Build web copiado aquí al compilar
 │   │   │   └── res/
 │   │   │       ├── values/       # Español (default)
 │   │   │       ├── values-en/    # Inglés
@@ -54,8 +54,8 @@ En Android Studio: Build → Build APK
 ```bash
 npm install
 npm run build
-mkdir -p android/app/src/main/assets/web
-cp -r dist/* android/app/src/main/assets/web/
+mkdir -p android/app/src/main/assets/public
+cp -r dist/* android/app/src/main/assets/public/
 cd android
 ./gradlew assembleRelease
 ```

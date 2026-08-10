@@ -22,15 +22,21 @@ export function useStore(user) {
     setLoading(true);
     setError(null);
     try {
+      const isManager = user.role === 'admin' || user.role === 'supervisor';
+
+      let checklistsQuery = supabase.from('checklists').select('*');
+      if (!isManager) {
+        checklistsQuery = checklistsQuery.eq('employee_number', user.employeeNumber);
+      }
+
+      let forkliftsQuery = supabase.from('forklifts').select('*');
+      if (!isManager) {
+        forkliftsQuery = forkliftsQuery.eq('employee_number', user.employeeNumber);
+      }
+
       const [checklistsRes, forkliftsRes] = await Promise.all([
-        supabase.from('checklists')
-          .select('*')
-          .eq('employee_number', user.employeeNumber)
-          .order('created_at', { ascending: false }),
-        supabase.from('forklifts')
-          .select('*')
-          .eq('employee_number', user.employeeNumber)
-          .order('created_at', { ascending: true }),
+        checklistsQuery.order('created_at', { ascending: false }),
+        forkliftsQuery.order('created_at', { ascending: true }),
       ]);
 
       if (checklistsRes.error) throw checklistsRes.error;
@@ -88,13 +94,14 @@ export function useStore(user) {
       if (updates.items !== undefined) dbUpdates.items = updates.items;
       if (updates.observations !== undefined) dbUpdates.observations = updates.observations;
 
-      const { data, error: dbError } = await supabase
-        .from('checklists')
-        .update(dbUpdates)
-        .eq('id', id)
-        .eq('employee_number', user?.employeeNumber)
-        .select()
-        .single();
+      const isManager = user?.role === 'admin' || user?.role === 'supervisor';
+
+      let query = supabase.from('checklists').update(dbUpdates).eq('id', id);
+      if (!isManager) {
+        query = query.eq('employee_number', user?.employeeNumber);
+      }
+
+      const { data, error: dbError } = await query.select().single();
 
       if (dbError) throw dbError;
       const mapped = mapChecklistFromDB(data);
@@ -109,11 +116,14 @@ export function useStore(user) {
 
   const deleteChecklist = useCallback(async (id) => {
     try {
-      const { error: dbError } = await supabase
-        .from('checklists')
-        .delete()
-        .eq('id', id)
-        .eq('employee_number', user?.employeeNumber);
+      const isManager = user?.role === 'admin' || user?.role === 'supervisor';
+
+      let query = supabase.from('checklists').delete().eq('id', id);
+      if (!isManager) {
+        query = query.eq('employee_number', user?.employeeNumber);
+      }
+
+      const { error: dbError } = await query;
       if (dbError) throw dbError;
       setChecklists(prev => prev.filter(c => c.id !== id));
     } catch (err) {
@@ -183,13 +193,14 @@ export function useStore(user) {
       if (updates.platePhotoPath !== undefined) dbUpdates.plate_photo_path = updates.platePhotoPath;
       if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
 
-      const { data, error: dbError } = await supabase
-        .from('forklifts')
-        .update(dbUpdates)
-        .eq('id', id)
-        .eq('employee_number', user?.employeeNumber)
-        .select()
-        .single();
+      const isManager = user?.role === 'admin' || user?.role === 'supervisor';
+
+      let query = supabase.from('forklifts').update(dbUpdates).eq('id', id);
+      if (!isManager) {
+        query = query.eq('employee_number', user?.employeeNumber);
+      }
+
+      const { data, error: dbError } = await query.select().single();
 
       if (dbError) throw dbError;
       const mapped = mapForkliftFromDB(data);
@@ -204,11 +215,14 @@ export function useStore(user) {
 
   const deleteForklift = useCallback(async (id) => {
     try {
-      const { error: dbError } = await supabase
-        .from('forklifts')
-        .delete()
-        .eq('id', id)
-        .eq('employee_number', user?.employeeNumber);
+      const isManager = user?.role === 'admin' || user?.role === 'supervisor';
+
+      let query = supabase.from('forklifts').delete().eq('id', id);
+      if (!isManager) {
+        query = query.eq('employee_number', user?.employeeNumber);
+      }
+
+      const { error: dbError } = await query;
       if (dbError) throw dbError;
       setForklifts(prev => prev.filter(f => f.id !== id));
     } catch (err) {
