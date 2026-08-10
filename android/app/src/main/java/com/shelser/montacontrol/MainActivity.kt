@@ -14,19 +14,17 @@ class MainActivity : BridgeActivity() {
         super.onCreate(savedInstanceState)
 
         // FLAG_SECURE: bloquea capturas de pantalla
+        // Comentado para depuración
+        /*
         window.setFlags(
             WindowManager.LayoutParams.FLAG_SECURE,
             WindowManager.LayoutParams.FLAG_SECURE
         )
+        */
 
-        // Capturar logs de consola del JavaScript para diagnosticar la pantalla en blanco.
-        // Solo sobrescribimos WebChromeClient (seguro) — NO tocamos WebViewClient
-        // porque Capacitor necesita el suyo para que el bridge funcione.
         try {
-            val bridgeWebView = findViewById<android.webkit.WebView>(com.getcapacitor.R.id.webview)
+            val bridgeWebView = bridge.webView
             if (bridgeWebView != null) {
-                Log.d(TAG, "WebView found — bridge initialized OK")
-
                 bridgeWebView.webChromeClient = object : WebChromeClient() {
                     override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                         Log.d(
@@ -36,11 +34,6 @@ class MainActivity : BridgeActivity() {
                         return true
                     }
                 }
-
-                Log.d(TAG, "WebView URL: ${bridgeWebView.url}")
-                Log.d(TAG, "WebView settings: JS=${bridgeWebView.settings.javaScriptEnabled}, DOMStorage=${bridgeWebView.settings.domStorageEnabled}")
-            } else {
-                Log.e(TAG, "WebView NOT found — bridge failed to initialize!")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error setting up WebView logging", e)
