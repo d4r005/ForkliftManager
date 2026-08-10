@@ -1,5 +1,5 @@
-- [x] Corregir ruta de carga en `MainActivity.java` (Android)
-- [x] Implementar visibilidad global para Supervisor y Admin en `useStore.js`
-- [x] Actualizar instrucciones en `android/README.md`
+- [x] Corregir `MainActivity.java` para usar `BridgeActivity` (Fix Pantalla en Blanco)
+- [x] Mantener protección contra capturas de pantalla (`FLAG_SECURE`)
+- [x] Ejecutar compilación web y sincronización Capacitor
 - [x] Generar nuevo APK Release firmado
 - [/] Realizar commit y push de los cambios

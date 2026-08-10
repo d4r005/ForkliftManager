@@ -1,36 +1,36 @@
-# Plan de Implementación: Corrección de Carga Android y Visibilidad Global para Supervisores
+# Plan de Implementación: Corrección de Pantalla en Blanco y Confirmación de Visibilidad Global
 
-Este plan aborda dos puntos críticos: el error de "Página web no disponible" en Android y la necesidad de que los supervisores tengan acceso global a los datos.
+Este plan resuelve el problema de la "pantalla en blanco" en Android y confirma el funcionamiento de la visibilidad global para Administradores y Supervisores en ambas plataformas.
 
-## User Review Required
+## Análisis del Problema (Pantalla en Blanco)
 
 > [!IMPORTANT]
-> **Error en Android**: El problema se debe a que la aplicación nativa busca los archivos en una carpeta llamada `web/`, pero Capacitor (el sistema que usamos para conectar la web con el móvil) los coloca por defecto en `public/`. Se corregirá la ruta en el código nativo de Android.
+> La aplicación Android muestra una pantalla en blanco porque la clase `MainActivity` actual no utiliza el "Puente" de Capacitor (`BridgeActivity`).
+> Al usar un `WebView` manual con el protocolo `file://`, las rutas de los archivos generados por Vite (como `/assets/...`) fallan al cargar. Además, esto impide que los plugins de Capacitor funcionen.
 
-> [!NOTE]
-> **Acceso Supervisor**: Se habilitará el rol de Supervisor para que, al igual que el Administrador, pueda ver todas las inspecciones de todos los operadores, facilitando el seguimiento de fallos en los equipos.
+## Propuesta de Solución
 
-## Proposed Changes
-
-### 1. Aplicación Android (Código Nativo)
+### 1. Aplicación Android (MainActivity)
 
 #### [MODIFY] [MainActivity.java](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/android/app/src/main/java/com/shelser/montacontrol/MainActivity.java)
-- Cambiar la línea `webView.loadUrl("file:///android_asset/web/index.html");` por `webView.loadUrl("file:///android_asset/public/index.html");`. Esto alineará la aplicación nativa con la estructura de carpetas de Capacitor.
+- Cambiar la herencia de `AppCompatActivity` a `BridgeActivity`.
+- Eliminar la configuración manual del `WebView`, ya que Capacitor se encarga de esto de forma óptima y segura.
+- Mantener la línea `FLAG_SECURE` para seguir bloqueando capturas de pantalla, integrándola en el ciclo de vida de Capacitor.
 
-### 2. Lógica de Datos (Web)
+### 2. Configuración de Construcción (Vite)
 
-#### [MODIFY] [useStore.js](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/hooks/useStore.js)
-- Actualizar las consultas a Supabase en `loadData` para que no apliquen el filtro de `employee_number` si el usuario tiene el rol `supervisor`.
-- Permitir que el supervisor actualice o elimine checklists y montacargas de cualquier empleado, al igual que el administrador.
+#### [MODIFY] [vite.config.js](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/vite.config.js)
+- Asegurar que la base sea relativa si es necesario, aunque al usar `BridgeActivity` la carga se realiza vía un servidor local interno (`https://localhost`), lo cual es compatible con la configuración actual.
 
-### 3. Documentación
+## Respuesta a Dudas del Usuario
 
-#### [MODIFY] [README.md (Android)](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/android/README.md)
-- Actualizar las instrucciones manuales para que indiquen la carpeta `public` en lugar de `web`.
+> [!NOTE]
+> **Visibilidad Global**: Sí, tanto en la **web** como en la **aplicación Android**, si inicias sesión como **Administrador** o **Supervisor**, verás automáticamente el Dashboard global y la lista de revisiones de todos los empleados. Los operadores seguirán viendo solo sus propios datos. Esto ya está implementado en la lógica compartida (`useStore.js`).
 
 ## Verification Plan
 
 ### Manual Verification
-1. **Android**: Generar un nuevo APK después del cambio y verificar que la aplicación cargue correctamente la pantalla de inicio (Login).
-2. **Supervisor**: Iniciar sesión con un usuario con rol de Supervisor y confirmar que el Dashboard muestra el total de revisiones de la empresa y no solo las propias.
-3. **Operador**: Confirmar que un usuario con rol de Operador sigue viendo únicamente su propia información por seguridad y orden.
+1. **Compilación**: Ejecutar `npm run build` y `npx cap sync android`.
+2. **Generación de APK**: Generar el APK release firmado.
+3. **Prueba en Dispositivo**: Instalar el APK y verificar que aparezca la pantalla de login correctamente (no blanco).
+4. **Prueba de Roles**: Iniciar sesión como Supervisor en el teléfono y verificar que aparezcan las revisiones globales.
