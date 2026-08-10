@@ -1,16 +1,22 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import { checklistItems } from '../data/checklistItems.js';
 import nafLogoUrl from '../assets/bitacora-naf-logo.png';
 import shelserLogoUrl from '../assets/bitacora-shelser-logo.png';
+import notoRegularUrl from '../assets/NotoSansSC-Regular.ttf';
+import notoBoldUrl from '../assets/NotoSansSC-Bold.ttf';
 
 // ============================================================================
 // Genera el PDF de la bitácora de revisión de montacargas dibujando todo desde
 // cero con pdf-lib — sin depender de ninguna plantilla en Supabase.
-// Réplica visual del formato oficial F-SH-006-06.
-// US Letter horizontal (792 × 612 pt).
+// Réplica visual del formato oficial F-SH-006-06, incluyendo el chino tal
+// cual aparece en el Excel (fuente Noto Sans SC embebida, subconjunto con
+// solo los caracteres usados en la app).
+// US Letter horizontal (792 × 612 pt), ajustado a 1 sola página.
 // ============================================================================
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const MONTHS_ZH = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
 
 const C_BLACK  = rgb(0, 0, 0);
 const C_WHITE  = rgb(1, 1, 1);
@@ -22,180 +28,232 @@ const C_LIGHT  = rgb(0.97, 0.97, 0.97);
 
 const PAGE_W = 792;
 const PAGE_H = 612;
-const MARGIN = 12;
-const CONCEPT_W = 185;
-const TABLE_X = MARGIN + CONCEPT_W;          // 197
-const DAY_W = (PAGE_W - MARGIN - TABLE_X) / 31; // ≈ 18.87
+const MARGIN = 10;
+const CONCEPT_W = 175;
+const TABLE_X = MARGIN + CONCEPT_W;
+const DAY_W = (PAGE_W - MARGIN - TABLE_X) / 31; // todas las columnas de día iguales
+
+const isCJK = (ch) => {
+  const c = ch.codePointAt(0);
+  return (c >= 0x2e80 && c <= 0x9fff) || (c >= 0xff00 && c <= 0xffef) || (c >= 0x3000 && c <= 0x303f);
+};
 
 export async function exportChecklistToPdf(checklist) {
   const pdfDoc = await PDFDocument.create();
-  const font     = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  pdfDoc.registerFontkit(fontkit);
+
+  const font       = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold   = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  let cjkFont = font;
+  let cjkFontBold = fontBold;
+  try {
+    const [regBuf, boldBuf] = await Promise.all([
+      fetch(notoRegularUrl).then(r => r.arrayBuffer()),
+      fetch(notoBoldUrl).then(r => r.arrayBuffer()),
+    ]);
+    cjkFont = await pdfDoc.embedFont(regBuf, { subset: true });
+    cjkFontBold = await pdfDoc.embedFont(boldBuf, { subset: true });
+  } catch (e) {
+    console.warn('No se pudo cargar la fuente china, se omitirán esos caracteres:', e);
+  }
+
   const page = pdfDoc.addPage([PAGE_W, PAGE_H]);
+  const py = (yTop) => PAGE_H - yTop;
 
-  // --- helpers (todo en coordenadas "desde arriba") ---
-  const py = (yTop) => PAGE_H - yTop; // convierte a sistema pdf-lib (origen abajo-izq)
+  const fontFor = (bold, cjk) => (cjk ? (bold ? cjkFontBold : cjkFont) : (bold ? fontBold : font));
 
-  // Rectángulo: esquina sup-izq (x, yTop), ancho w, alto h
-  const rect = (x, yTop, w, h, color) =>
-    page.drawRectangle({ x, y: py(yTop + h), width: w, height: h, color });
+  // --- Tokeniza un texto mixto ES/ZH en "palabras" (por espacios) clasificadas ---
+  const tokenize = (str) => String(str).split(/(\s+)/).filter((t) => t !== '').map((t) => ({
+    text: t,
+    cjk: [...t].some(isCJK),
+  }));
 
-  // Línea horizontal
+  const tokenWidth = (tok, size, bold) => fontFor(bold, tok.cjk).widthOfTextAtSize(tok.text, size);
+
+  // --- Envuelve tokens en líneas que no excedan maxWidth ---
+  const wrapTokens = (str, maxWidth, size, bold) => {
+    const tokens = tokenize(str);
+    const lines = [];
+    let cur = [];
+    let curW = 0;
+    for (const tok of tokens) {
+      if (/^\s+$/.test(tok.text)) {
+        if (cur.length) { cur.push(tok); curW += tokenWidth(tok, size, bold); }
+        continue;
+      }
+      const w = tokenWidth(tok, size, bold);
+      if (curW + w > maxWidth && cur.length) {
+        lines.push(cur);
+        cur = [];
+        curW = 0;
+      }
+      cur.push(tok);
+      curW += w;
+    }
+    if (cur.length) lines.push(cur);
+    return lines.map((line) => {
+      // recorta espacios al inicio/fin de línea
+      while (line.length && /^\s+$/.test(line[0].text)) line.shift();
+      while (line.length && /^\s+$/.test(line[line.length - 1].text)) line.pop();
+      return line;
+    });
+  };
+
+  const lineWidth = (line, size, bold) => line.reduce((s, t) => s + tokenWidth(t, size, bold), 0);
+
+  // Dibuja una línea (array de tokens) empezando en x, con el TOP del texto en yTop
+  const drawLine = (line, x, yTop, size, bold, color) => {
+    let dx = x;
+    for (const tok of line) {
+      const f = fontFor(bold, tok.cjk);
+      page.drawText(tok.text, { x: dx, y: py(yTop + size * 0.9), size, font: f, color });
+      dx += f.widthOfTextAtSize(tok.text, size);
+    }
+  };
+
+  // Dibuja texto mixto de una sola línea, con alineación, centrado vertical en una fila
+  const textRow = (str, x, yTop, rowH, size, bold = false, color = C_BLACK, align = 'left') => {
+    if (!str) return;
+    const line = tokenize(str);
+    const w = lineWidth(line, size, bold);
+    let dx = x;
+    if (align === 'center') dx = x - w / 2;
+    else if (align === 'right') dx = x - w;
+    const baselineY = yTop + rowH / 2 + size * 0.32;
+    drawLine(line, dx, baselineY - size * 0.9, size, bold, color);
+  };
+
+  // Dibuja texto mixto envuelto en varias líneas dentro de un ancho máximo,
+  // centrado verticalmente dentro de rowH (hasta maxLines líneas)
+  const textWrapped = (str, x, yTop, maxWidth, rowH, size, bold = false, color = C_BLACK, lineGap = 1.15, maxLines = 3) => {
+    if (!str) return;
+    let lines = wrapTokens(str, maxWidth, size, bold);
+    if (lines.length > maxLines) lines = lines.slice(0, maxLines);
+    const lh = size * lineGap;
+    const totalH = lines.length * lh;
+    let curTop = yTop + Math.max(0, (rowH - totalH) / 2);
+    for (const line of lines) {
+      drawLine(line, x, curTop, size, bold, color);
+      curTop += lh;
+    }
+  };
+
+  const rect = (x, yTop, w, h, color) => page.drawRectangle({ x, y: py(yTop + h), width: w, height: h, color });
   const hline = (x1, x2, yTop, color = C_BLACK, th = 0.5) =>
     page.drawLine({ start: { x: x1, y: py(yTop) }, end: { x: x2, y: py(yTop) }, thickness: th, color });
-
-  // Línea vertical
   const vline = (x, yTop1, yTop2, color = C_BLACK, th = 0.5) =>
     page.drawLine({ start: { x, y: py(yTop1) }, end: { x, y: py(yTop2) }, thickness: th, color });
-
-  // Texto con la parte superior en yTop
-  const text = (str, x, yTop, size, f = font, color = C_BLACK) => {
-    if (!str) return;
-    page.drawText(String(str), { x, y: py(yTop + size * 0.72), size, font: f, color });
-  };
-
-  // Texto centrado verticalmente en una fila (yTop → yTop+rowH) y opcionalmente centrado horizontal
-  const textRow = (str, x, yTop, rowH, size, f = font, color = C_BLACK, align = 'left') => {
-    if (!str) return;
-    const baselineTop = yTop + rowH / 2 + size * 0.25;
-    let dx = x;
-    if (align === 'center') {
-      const w = f.widthOfTextAtSize(String(str), size);
-      dx = x - w / 2;
-    } else if (align === 'right') {
-      const w = f.widthOfTextAtSize(String(str), size);
-      dx = x - w;
-    }
-    page.drawText(String(str), { x: dx, y: py(baselineTop), size, font: f, color });
-  };
-
-  // Imagen: esquina sup-izq (x, yTop), ancho w, alto h
-  const imgTop = (img, x, yTop, w, h) =>
-    page.drawImage(img, { x, y: py(yTop + h), width: w, height: h });
+  const imgTop = (img, x, yTop, w, h) => page.drawImage(img, { x, y: py(yTop + h), width: w, height: h });
 
   // ======================== LAYOUT ========================
+  let y = 4;
 
-  // --- Sección 1: Logos + nombre empresa (5 → 53) ---
-  let y = 5;
-  const s1H = 46;
+  // --- Sección 1: Logos + nombre empresa ---
+  const s1H = 38;
   try {
     const [nafBuf, shelserBuf] = await Promise.all([
       fetch(nafLogoUrl).then(r => r.arrayBuffer()),
       fetch(shelserLogoUrl).then(r => r.arrayBuffer()),
     ]);
-    const nafImg     = await pdfDoc.embedPng(nafBuf);
+    const nafImg = await pdfDoc.embedPng(nafBuf);
     const shelserImg = await pdfDoc.embedPng(shelserBuf);
 
-    // Logo NAF (izquierda)
-    const nafH = 36;
+    const nafH = 32;
     const nafW = nafImg.width * (nafH / nafImg.height);
-    imgTop(nafImg, MARGIN + 4, y + 4, nafW, nafH);
+    imgTop(nafImg, MARGIN + 3, y + 3, nafW, nafH);
 
-    // Logo SHELSER (derecha)
-    const shH = 36;
+    const shH = 32;
     const shW = shelserImg.width * (shH / shelserImg.height);
-    imgTop(shelserImg, PAGE_W - MARGIN - 4 - shW, y + 4, shW, shH);
+    imgTop(shelserImg, PAGE_W - MARGIN - 3 - shW, y + 3, shW, shH);
   } catch (e) {
     console.warn('Logos no disponibles:', e);
   }
-
-  textRow('SHELSER S. DE R.L. DE C.V.', (MARGIN + PAGE_W - MARGIN) / 2, y, s1H, 15, fontBold, C_BLACK, 'center');
+  textRow('SHELSER S. DE R.L. DE C.V.', (MARGIN + PAGE_W - MARGIN) / 2, y, s1H, 13, true, C_BLACK, 'center');
   y += s1H + 2;
 
-  // --- Sección 2: Franja negra (53 → 76) ---
-  const s2H = 22;
+  // --- Sección 2: Franja negra bilingüe ---
+  const s2H = 18;
   rect(MARGIN, y, PAGE_W - 2 * MARGIN, s2H, C_BLACK);
-  textRow('SEGURIDAD Y SALUD EN EL TRABAJO', (MARGIN + PAGE_W) / 2, y, s2H, 11, fontBold, C_WHITE, 'center');
+  textRow('SEGURIDAD Y SALUD EN EL TRABAJO 职业安全与健康', (MARGIN + PAGE_W) / 2, y, s2H, 9.5, true, C_WHITE, 'center');
   y += s2H + 2;
 
-  // --- Sección 3: Franja dorada (78 → 106) ---
+  // --- Sección 3: Franja dorada ---
   const s3H = 26;
   rect(MARGIN, y, PAGE_W - 2 * MARGIN, s3H, C_GOLD);
-  textRow('BITACORA DE REVISION DE MONTACARGAS', (MARGIN + PAGE_W) / 2, y, s3H * 0.55, 12, fontBold, C_WHITE, 'center');
-  textRow('NOM-006-STPS-2014  Numeral 7.8.5', (MARGIN + PAGE_W) / 2, y + s3H * 0.45, s3H * 0.55, 8, font, C_WHITE, 'center');
+  textRow('BITÁCORA DE REVISIÓN DE MONTACARGAS 叉车检查记录表', (MARGIN + PAGE_W) / 2, y, s3H * 0.55, 10, true, C_WHITE, 'center');
+  textRow('NOM-006-STPS-2014  Numeral 7.8.5', (MARGIN + PAGE_W) / 2, y + s3H * 0.5, s3H * 0.5, 7.5, false, C_WHITE, 'center');
   y += s3H + 2;
 
-  // --- Sección 4: Identificación / Mes / Operador (108 → 130) ---
-  const s4H = 22;
-  // etiquetas
-  text('Identificacion del montacargas:', MARGIN + 3, y + 2, 7.5, fontBold);
-  text(checklist.forkliftId || '', MARGIN + 3, y + 12, 8.5, font);
+  // --- Sección 4: Identificación / Mes / Operador ---
+  const s4H = 20;
+  textRow('Identificación del montacargas 叉车编号:', MARGIN + 4, y, s4H * 0.5, 6.5, true, C_BLACK, 'left');
+  textRow(checklist.forkliftId || '', MARGIN + 4, y + s4H * 0.5, s4H * 0.5, 8, false, C_BLACK, 'left');
 
-  const midX = MARGIN + CONCEPT_W * 0.52;
-  text('Mes:', midX, y + 2, 7.5, fontBold);
+  const midX = MARGIN + CONCEPT_W * 0.5;
+  textRow('Mes 月', midX, y, s4H * 0.5, 6.5, true, C_BLACK, 'left');
   const monthIdx = checklist.month ?? new Date().getMonth();
-  text(`${MONTHS_ES[monthIdx] || ''}  ${checklist.year || ''}`, midX + 22, y + 2, 8, font);
+  textRow(`${MONTHS_ES[monthIdx] || ''} ${MONTHS_ZH[monthIdx] || ''}  ${checklist.year || ''}`, midX, y + s4H * 0.5, s4H * 0.5, 7.5, false, C_BLACK, 'left');
 
-  text('Nombre del operador:', TABLE_X + 5, y + 2, 7.5, fontBold);
-  text(checklist.operatorName || '', TABLE_X + 88, y + 2, 8, font);
+  textRow(`Nombre del operador操作员姓名: ${checklist.operatorName || ''}`, TABLE_X + 5, y, s4H, 7.5, true, C_BLACK, 'left');
 
-  // borde de la sección
   hline(MARGIN, PAGE_W - MARGIN, y, C_BLACK, 0.7);
   hline(MARGIN, PAGE_W - MARGIN, y + s4H, C_BLACK, 0.7);
   vline(MARGIN, y, y + s4H);
+  vline(TABLE_X, y, y + s4H);
   vline(PAGE_W - MARGIN, y, y + s4H);
   y += s4H + 2;
 
-  // --- Sección 5: Instrucciones (132 → 150) ---
-  const s5H = 16;
-  textRow(
-    'Instrucciones: Marque todos los renglones indicados.  SAT: Satisfactorio,  INS: Insatisfactorio,  N/A: No Aplica.',
-    (MARGIN + PAGE_W) / 2, y, s5H, 7, fontBold, C_BLACK, 'center'
-  );
+  // --- Sección 5: Instrucciones (bilingüe, puede envolver 2 líneas) ---
+  const s5H = 20;
+  const instrText = 'Instrucciones 说明: Marque todos los renglones indicados. 请勾选所有检查项目。 SAT: Satisfactorio 格, INS: Insatisfactorio 不合格, N/A: No Aplica 不适用。';
+  textWrapped(instrText, MARGIN + 4, y, PAGE_W - 2 * MARGIN - 8, s5H, 6, true, C_BLACK, 1.15, 2);
   hline(MARGIN, PAGE_W - MARGIN, y, C_BLACK, 0.5);
   hline(MARGIN, PAGE_W - MARGIN, y + s5H, C_BLACK, 0.5);
   y += s5H + 2;
 
-  // --- Sección 6: Encabezado de tabla (152 → 167) ---
-  const s6H = 15;
+  // --- Sección 6: Encabezado de tabla ---
+  const s6H = 13;
   rect(MARGIN, y, CONCEPT_W, s6H, C_GRAY);
-  textRow('CONCEPTO A REVISAR', MARGIN + 3, y, s6H, 8, fontBold, C_BLACK, 'left');
+  textRow('CONCEPTO A REVISAR 检查项目', MARGIN + 3, y, s6H, 6.5, true, C_BLACK, 'left');
   for (let d = 1; d <= 31; d++) {
     const dx = TABLE_X + (d - 1) * DAY_W;
     if (d === checklist.day) rect(dx, y, DAY_W, s6H, C_GOLD);
-    textRow(String(d), dx + DAY_W / 2, y, s6H, 7, fontBold, C_BLACK, 'center');
+    textRow(String(d), dx + DAY_W / 2, y, s6H, 6, true, C_BLACK, 'center');
   }
   y += s6H;
 
-  // --- Sección 7: 26 conceptos (167 → 505) ---
-  const itemH = 13;
+  // --- Sección 7: 26 conceptos ---
+  const itemH = 15;
   checklistItems.forEach((item, idx) => {
     const rTop = y + idx * itemH;
-    if (idx % 2 === 1) rect(MARGIN, rTop, CONCEPT_W, itemH, C_LIGHT); // rayado alterno
-    const label = `${item.id}.- ${item.es}`;
-    textRow(label, MARGIN + 3, rTop, itemH, 6.8, font, C_BLACK, 'left');
+    if (idx % 2 === 1) rect(MARGIN, rTop, CONCEPT_W, itemH, C_LIGHT);
+    const label = `${item.id}.- ${item.es} ${item.zh}`;
+    textWrapped(label, MARGIN + 3, rTop, CONCEPT_W - 6, itemH, 5.6, false, C_BLACK, 1.05, 2);
 
     const rating = checklist.items?.[item.id];
     if (rating) {
       const dx = TABLE_X + (checklist.day - 1) * DAY_W;
       if (rating === 'SAT') rect(dx, rTop, DAY_W, itemH, C_GREEN);
       else if (rating === 'INS') rect(dx, rTop, DAY_W, itemH, C_RED);
-      textRow(rating, dx + DAY_W / 2, rTop, itemH, 6.5, fontBold, C_BLACK, 'center');
+      textRow(rating, dx + DAY_W / 2, rTop, itemH, 6, true, C_BLACK, 'center');
     }
   });
 
-  // --- Cuadrícula de la tabla ---
-  const gridTop = y - s6H; // inicio del header
+  // --- Cuadrícula ---
+  const gridTop = y - s6H;
   const gridBot = y + 26 * itemH;
-
-  // Líneas horizontales (header + 26 filas)
-  for (let i = 0; i <= 26; i++) {
-    hline(MARGIN, PAGE_W - MARGIN, y + i * itemH);
-  }
-  hline(MARGIN, PAGE_W - MARGIN, gridTop); // borde superior del header
-
-  // Líneas verticales
+  for (let i = 0; i <= 26; i++) hline(MARGIN, PAGE_W - MARGIN, y + i * itemH);
+  hline(MARGIN, PAGE_W - MARGIN, gridTop);
   vline(MARGIN, gridTop, gridBot);
   vline(TABLE_X, gridTop, gridBot);
-  for (let d = 0; d <= 31; d++) {
-    vline(TABLE_X + d * DAY_W, gridTop, gridBot);
-  }
+  for (let d = 0; d <= 31; d++) vline(TABLE_X + d * DAY_W, gridTop, gridBot);
 
-  y = gridBot + 4;
+  y = gridBot + 3;
 
   // --- Sección 8: Nombre de quien revisa ---
-  const s8H = 16;
-  textRow(`Nombre de quien revisa:  ${checklist.inspectorName || ''}`, MARGIN + 3, y, s8H, 9, fontBold, C_BLACK, 'left');
+  const s8H = 14;
+  textRow(`NOMBRE DE QUIEN REVISA 检查人姓名: ${checklist.inspectorName || ''}`, MARGIN + 3, y, s8H, 7.5, true, C_BLACK, 'left');
   hline(MARGIN, PAGE_W - MARGIN, y);
   hline(MARGIN, PAGE_W - MARGIN, y + s8H);
   vline(MARGIN, y, y + s8H);
@@ -203,8 +261,8 @@ export async function exportChecklistToPdf(checklist) {
   y += s8H + 2;
 
   // --- Sección 9: Observaciones ---
-  const s9H = 26;
-  text(`Observaciones:  ${checklist.observations || ''}`, MARGIN + 3, y + 3, 8, fontBold);
+  const s9H = 20;
+  textWrapped(`OBSERVACIONES 备注: ${checklist.observations || ''}`, MARGIN + 3, y, PAGE_W - 2 * MARGIN - 6, s9H, 7, true, C_BLACK, 1.15, 2);
   hline(MARGIN, PAGE_W - MARGIN, y);
   hline(MARGIN, PAGE_W - MARGIN, y + s9H);
   vline(MARGIN, y, y + s9H);
