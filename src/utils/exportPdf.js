@@ -186,16 +186,28 @@ export async function exportChecklistToPdf(checklist) {
   y += s3H + 2;
 
   // --- Sección 4: Identificación / Mes / Operador ---
-  const s4H = 20;
-  textRow('Identificación del montacargas 叉车编号:', MARGIN + 4, y, s4H * 0.5, 6.5, true, C_BLACK, 'left');
-  textRow(checklist.forkliftId || '', MARGIN + 4, y + s4H * 0.5, s4H * 0.5, 8, false, C_BLACK, 'left');
-
+  // IMPORTANTE: usar textWrapped (con ancho máximo) y NUNCA textRow (una sola
+  // línea sin límite) aquí — "Identificación del montacargas 叉车编号:" es
+  // más largo que su columna y con textRow se dibujaba encima de "Mes 月"
+  // en la misma línea (bug de traslape de texto).
+  const s4H = 26;
+  const col1W = CONCEPT_W * 0.5 - 8;
+  const col2W = CONCEPT_W * 0.5 - 9;
   const midX = MARGIN + CONCEPT_W * 0.5;
-  textRow('Mes 月', midX, y, s4H * 0.5, 6.5, true, C_BLACK, 'left');
   const monthIdx = checklist.month ?? new Date().getMonth();
-  textRow(`${MONTHS_ES[monthIdx] || ''} ${MONTHS_ZH[monthIdx] || ''}  ${checklist.year || ''}`, midX, y + s4H * 0.5, s4H * 0.5, 7.5, false, C_BLACK, 'left');
 
-  textRow(`Nombre del operador 操作员姓名: ${checklist.operatorName || ''}`, TABLE_X + 5, y, s4H, 7.5, true, C_BLACK, 'left');
+  textWrapped(
+    `Identificación del montacargas 叉车编号: ${checklist.forkliftId || ''}`,
+    MARGIN + 4, y, col1W, s4H, 6.5, true, C_BLACK, 1.15, 2
+  );
+  textWrapped(
+    `Mes 月: ${MONTHS_ES[monthIdx] || ''} ${MONTHS_ZH[monthIdx] || ''} ${checklist.year || ''}`.trim(),
+    midX + 4, y, col2W, s4H, 6.5, true, C_BLACK, 1.15, 2
+  );
+  textWrapped(
+    `Nombre del operador 操作员姓名: ${checklist.operatorName || ''}`,
+    TABLE_X + 5, y, PAGE_W - MARGIN - TABLE_X - 10, s4H, 7.5, true, C_BLACK, 1.15, 2
+  );
 
   hline(MARGIN, PAGE_W - MARGIN, y, C_BLACK, 0.7);
   hline(MARGIN, PAGE_W - MARGIN, y + s4H, C_BLACK, 0.7);
