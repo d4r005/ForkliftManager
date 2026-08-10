@@ -115,7 +115,7 @@ export default function PdfDesigner({ onClose }) {
         <div className="toolbar-group">
           <strong>📐 {pdfSize.width > pdfSize.height ? 'Horizontal' : 'Vertical'} ({pdfSize.width}x{pdfSize.height})</strong>
           <button className="btn btn-primary" onClick={() => savePdfConfig(config).then(() => alert('Guardado!'))}>💾 Guardar Todo</button>
-          <button className="btn btn-secondary" onClick={() => exportChecklistToPdf(testData, 'es', config)}>📄 Probar PDF Actual</button>
+          <button className="btn btn-secondary" onClick={() => exportChecklistToPdf(testData)}>📄 Probar PDF Actual</button>
           <button className="btn btn-sm" onClick={() => { setConfig(ensureItemY(DEFAULT_CONFIG)); }}>↩️ Reset Default</button>
         </div>
         <div className="toolbar-controls">

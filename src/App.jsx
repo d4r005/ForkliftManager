@@ -49,11 +49,11 @@ function AppContent() {
   };
 
   const handleExport = (c) => {
-    exportChecklistToExcel(c, lang);
+    exportChecklistToExcel(c);
   };
 
   const handleExportPdf = (c) => {
-    exportChecklistToPdf(c, lang);
+    exportChecklistToPdf(c);
   };
 
   if (authLoading) {
