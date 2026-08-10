@@ -196,9 +196,20 @@ export async function exportChecklistToPdf(checklist) {
   const midX = MARGIN + CONCEPT_W * 0.5;
   const monthIdx = checklist.month ?? new Date().getMonth();
 
+  // NOTA: antes esta etiqueta + el ID iban concatenados en un solo string
+  // pasado a textWrapped(maxLines=2). La etiqueta bilingüe por sí sola ya
+  // ocupa las 2 líneas permitidas dentro de col1W, así que el ID quedaba
+  // recortado por wrapTokens/slice(0, maxLines) y nunca se dibujaba (bug:
+  // el PDF salía con "Identificación del montacargas" vacío). Ahora la
+  // etiqueta y el valor se dibujan por separado, con el ID en su propia
+  // línea y en fuente más grande para que siempre sea visible.
   textWrapped(
-    `Identificación del montacargas 叉车编号: ${checklist.forkliftId || ''}`,
-    MARGIN + 4, y, col1W, s4H, 6.5, true, C_BLACK, 1.15, 2
+    'Identificación del montacargas 叉车编号:',
+    MARGIN + 4, y, col1W, s4H * 0.46, 6, true, C_BLACK, 1.1, 1
+  );
+  textRow(
+    checklist.forkliftId || 'N/A',
+    MARGIN + 4, y + s4H * 0.42, s4H * 0.58, 10.5, true, C_BLACK, 'left'
   );
   textWrapped(
     `Mes 月: ${MONTHS_ES[monthIdx] || ''} ${MONTHS_ZH[monthIdx] || ''} ${checklist.year || ''}`.trim(),
