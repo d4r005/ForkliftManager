@@ -69,7 +69,10 @@ export async function exportChecklistToPdf(checklist) {
     cjk: [...t].some(isCJK),
   }));
 
-  const tokenWidth = (tok, size, bold) => fontFor(bold, tok.cjk).widthOfTextAtSize(tok.text, size);
+  // Ancho de un token sumando cada carácter con SU propia fuente (ver nota
+  // en drawLine sobre por qué esto no puede hacerse por token completo).
+  const tokenWidth = (tok, size, bold) =>
+    [...tok.text].reduce((sum, ch) => sum + fontFor(bold, isCJK(ch)).widthOfTextAtSize(ch, size), 0);
 
   // --- Envuelve tokens en líneas que no excedan maxWidth ---
   const wrapTokens = (str, maxWidth, size, bold) => {
@@ -102,13 +105,23 @@ export async function exportChecklistToPdf(checklist) {
 
   const lineWidth = (line, size, bold) => line.reduce((s, t) => s + tokenWidth(t, size, bold), 0);
 
-  // Dibuja una línea (array de tokens) empezando en x, con el TOP del texto en yTop
+  // Dibuja una línea (array de tokens) empezando en x, con el TOP del texto en yTop.
+  // IMPORTANTE: la fuente se elige POR CARÁCTER, no por token completo. La
+  // fuente china embebida es un subconjunto (solo ~150 glyphs, los usados en
+  // la app) y NO incluye puntuación ASCII básica (":", ","). Si un token
+  // mixto como "月:" o "不合格," se dibujaba entero con la fuente china (por
+  // tener algún carácter CJK), el ":" / "," caían fuera del subset y salían
+  // como un cuadro vacío (glyph .notdef) en vez del carácter — bug reportado
+  // en auditoría. Eligiendo la fuente carácter por carácter, la puntuación
+  // ASCII siempre usa Helvetica y los caracteres CJK siempre usan Noto Sans SC.
   const drawLine = (line, x, yTop, size, bold, color) => {
     let dx = x;
     for (const tok of line) {
-      const f = fontFor(bold, tok.cjk);
-      page.drawText(tok.text, { x: dx, y: py(yTop + size * 0.9), size, font: f, color });
-      dx += f.widthOfTextAtSize(tok.text, size);
+      for (const ch of tok.text) {
+        const f = fontFor(bold, isCJK(ch));
+        page.drawText(ch, { x: dx, y: py(yTop + size * 0.9), size, font: f, color });
+        dx += f.widthOfTextAtSize(ch, size);
+      }
     }
   };
 
@@ -191,29 +204,38 @@ export async function exportChecklistToPdf(checklist) {
   // más largo que su columna y con textRow se dibujaba encima de "Mes 月"
   // en la misma línea (bug de traslape de texto).
   const s4H = 26;
-  const col1W = CONCEPT_W * 0.5 - 8;
-  const col2W = CONCEPT_W * 0.5 - 9;
-  const midX = MARGIN + CONCEPT_W * 0.5;
+  // El renglón de Identificación necesita más ancho que Mes para que su
+  // etiqueta bilingüe quepa en 1 sola línea (medido con las fuentes reales:
+  // "Identificación del montacargas 叉车编号:" necesita ~106pt a 5.5pt, y
+  // "Mes 月: Agosto 八月 2026" cabe perfecto envuelto en 2 líneas con bastante
+  // menos ancho) — por eso el split ya NO es 50/50.
+  const col1AreaW = 122; // ancho reservado para toda la columna de Identificación
+  const col1W = col1AreaW - 8;
+  const midX = MARGIN + col1AreaW;
+  const col2W = CONCEPT_W - col1AreaW - 8;
   const monthIdx = checklist.month ?? new Date().getMonth();
 
   // NOTA: antes esta etiqueta + el ID iban concatenados en un solo string
   // pasado a textWrapped(maxLines=2). La etiqueta bilingüe por sí sola ya
   // ocupa las 2 líneas permitidas dentro de col1W, así que el ID quedaba
   // recortado por wrapTokens/slice(0, maxLines) y nunca se dibujaba (bug:
-  // el PDF salía con "Identificación del montacargas" vacío). Ahora la
-  // etiqueta y el valor se dibujan por separado, con el ID en su propia
-  // línea y en fuente más grande para que siempre sea visible.
+  // el PDF salía con "Identificación del montacargas" vacío). Un segundo
+  // intento angostó demasiado la columna y ahora ni la ETIQUETA cabía
+  // completa (salía "Identificación del" y se perdía "montacargas 叉车编号:").
+  // Fix definitivo: se ensanchó col1 (a costa de Mes, que sobra de espacio)
+  // para que la etiqueta quepa en 1 sola línea, y el ID se dibuja debajo en
+  // su propia línea, en fuente grande, para que siempre sea visible.
   textWrapped(
     'Identificación del montacargas 叉车编号:',
-    MARGIN + 4, y, col1W, s4H * 0.46, 6, true, C_BLACK, 1.1, 1
+    MARGIN + 4, y, col1W, s4H * 0.4, 5.5, true, C_BLACK, 1.1, 1
   );
   textRow(
     checklist.forkliftId || 'N/A',
-    MARGIN + 4, y + s4H * 0.42, s4H * 0.58, 10.5, true, C_BLACK, 'left'
+    MARGIN + 4, y + s4H * 0.42, s4H * 0.58, 11, true, C_BLACK, 'left'
   );
   textWrapped(
     `Mes 月: ${MONTHS_ES[monthIdx] || ''} ${MONTHS_ZH[monthIdx] || ''} ${checklist.year || ''}`.trim(),
-    midX + 4, y, col2W, s4H, 6.5, true, C_BLACK, 1.15, 2
+    midX + 4, y, col2W, s4H, 6, true, C_BLACK, 1.15, 2
   );
   textWrapped(
     `Nombre del operador 操作员姓名: ${checklist.operatorName || ''}`,
