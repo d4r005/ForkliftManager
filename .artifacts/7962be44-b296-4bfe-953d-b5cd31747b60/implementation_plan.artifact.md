@@ -1,34 +1,44 @@
-# Plan de Implementación: Mejora de Reconocimiento en PDF Maestro
+# Plan de Implementación: Generación de APK Release
 
-Este plan aborda la falta de coincidencias al importar el PDF Maestro de DC3, optimizando el motor de extracción de texto para manejar el formato específico de estos documentos (CURP con espacios y nombres sin etiquetas claras).
+Este plan detalla los pasos para generar un archivo APK de producción (release) para la aplicación Android.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> **Formato de CURP**: Los documentos DC3 suelen tener el CURP con espacios entre cada letra (ej. `N U X N ...`). Se ha detectado que el sistema actual no reconoce este formato.
-> **Detección por Nombre**: Se implementará una búsqueda directa de los nombres de tus empleados dentro de todo el texto del PDF, lo que aumentará drásticamente la tasa de éxito incluso si el formato del documento varía.
+> **Firma del APK**: Se ha detectado un archivo `montacontrol-release.keystore`. Para generar un APK firmado automáticamente, se requieren las contraseñas del almacén de llaves y de la clave, así como el alias. De lo contrario, se generará un APK "unsigned" que deberá firmarse manualmente.
+> **Gradle Wrapper**: Faltan los archivos del Gradle Wrapper (`gradlew`, `gradlew.bat`) en la carpeta `android`. Se intentará restaurarlos.
 
 ## Proposed Changes
 
-### 1. Motor de Extracción (Utilidades)
+### Preparación del Proyecto
 
-#### [MODIFY] [pdfExtract.js](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/utils/pdfExtract.js)
-- Actualizar `parseDocumentData` para:
-    - Reconocer CURP con espacios opcionales entre caracteres.
-    - Limpiar automáticamente los espacios al detectar un CURP para normalizarlo.
-    - Capturar bloques de texto en mayúsculas que podrían ser nombres si fallan las etiquetas estándar.
+#### [ACTION] Instalar dependencias faltantes
+- Se ha detectado que falta `@pdf-lib/fontkit`. Se instalará para asegurar que la compilación web sea exitosa.
 
-### 2. Lógica de Asociación (Componente)
+#### [ACTION] Reconstrucción de la carpeta Android (si es necesario)
+- Si los archivos de Gradle no pueden restaurarse, se podría requerir reinstalar la plataforma Android de Capacitor:
+  ```bash
+  npx cap add android
+  ```
+  *Nota: Esto se hará con precaución para no perder configuraciones personalizadas en `AndroidManifest.xml` o recursos.*
 
-#### [MODIFY] [MasterPdfImport.jsx](file:///C:/Users/dtruj/AndroidStudioProjects/ForkliftManager/src/components/MasterPdfImport.jsx)
-- Mejorar `findBestMatch`:
-    - Antes de usar lógica difusa (fuzzy), buscar si el nombre exacto de algún empleado aparece en cualquier parte del texto extraído de la página.
-    - Dar prioridad máxima a la coincidencia por CURP (ya normalizado).
-- Actualizar la visualización de "Datos detectados" para mostrar el CURP encontrado incluso si tiene espacios.
+### Generación del Build
+
+#### [STEP] Compilación Web
+- Ejecutar `npm run build` para generar los activos estáticos en la carpeta `dist`.
+
+#### [STEP] Sincronización Capacitor
+- Ejecutar `npx cap sync android` para copiar los activos web al proyecto nativo.
+
+#### [STEP] Generación de APK Release
+- Ejecutar el comando de Gradle:
+  ```bash
+  cd android && ./gradlew assembleRelease
+  ```
 
 ## Verification Plan
 
 ### Manual Verification
-1. **Prueba de CURP**: Subir el archivo `DC3_Masivo_21_trabajadores (1).pdf` y verificar que el CURP `NUXN961126HNEGXG04` sea detectado correctamente a pesar de los espacios en el papel.
-2. **Prueba de Nombre**: Verificar que "NGUYEN VAN NGOC" sea asociado automáticamente al empleado correspondiente.
-3. **Revisión de Páginas**: Confirmar que las páginas que contienen datos (anversos) sean marcadas para importar, mientras que las páginas en blanco o reversos puedan ser descartadas manualmente o ignoradas si no hay coincidencia.
+1. Verificar que el archivo `app-release.apk` (o `app-release-unsigned.apk`) se genere en la ruta `android/app/build/outputs/apk/release/`.
+2. Probar la instalación del APK en un dispositivo Android físico o emulador.
+3. Asegurarse de que la aplicación cargue correctamente los activos web compilados recientemente.

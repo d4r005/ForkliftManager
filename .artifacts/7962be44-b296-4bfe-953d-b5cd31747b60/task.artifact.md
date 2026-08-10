@@ -1,7 +1,4 @@
-- [x] Optimizar motor de extracción de PDF (`pdfExtract.js`)
-    - [x] Implementar ordenación espacial (coordenadas Y, X)
-    - [x] Refinar expresiones regulares para CURP/RFC con ruidos y espacios
-- [x] Mejorar interfaz de Importación de PDF Maestro (`MasterPdfImport.jsx`)
-    - [x] Añadir visualizador de texto extraído (Debug)
-    - [x] Optimizar algoritmo de búsqueda de nombres (insensibilidad total)
-- [/] Verificar con el archivo del usuario
+- [x] Configurar firma en `android/app/build.gradle`
+- [x] Restaurar Gradle Wrapper (`gradlew`)
+- [x] Ejecutar compilación web y sincronización
+- [x] Generar APK Release firmado
