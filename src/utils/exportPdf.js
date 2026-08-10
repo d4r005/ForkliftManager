@@ -195,7 +195,7 @@ export async function exportChecklistToPdf(checklist) {
   const monthIdx = checklist.month ?? new Date().getMonth();
   textRow(`${MONTHS_ES[monthIdx] || ''} ${MONTHS_ZH[monthIdx] || ''}  ${checklist.year || ''}`, midX, y + s4H * 0.5, s4H * 0.5, 7.5, false, C_BLACK, 'left');
 
-  textRow(`Nombre del operador操作员姓名: ${checklist.operatorName || ''}`, TABLE_X + 5, y, s4H, 7.5, true, C_BLACK, 'left');
+  textRow(`Nombre del operador 操作员姓名: ${checklist.operatorName || ''}`, TABLE_X + 5, y, s4H, 7.5, true, C_BLACK, 'left');
 
   hline(MARGIN, PAGE_W - MARGIN, y, C_BLACK, 0.7);
   hline(MARGIN, PAGE_W - MARGIN, y + s4H, C_BLACK, 0.7);

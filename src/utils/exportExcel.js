@@ -12,6 +12,13 @@ import shelserLogoUrl from '../assets/bitacora-shelser-logo.png';
 //
 // Dimensionado para que quepa en 1 sola hoja tamaño Carta (Letter) horizontal
 // al imprimir/exportar, y con las 31 columnas de días TODAS del mismo ancho.
+//
+// IMPORTANTE sobre texto bilingüe: siempre se deja un espacio entre el bloque
+// en español y el bloque en chino (nunca "operador操作员") porque varios
+// visores/impresoras de hojas de cálculo confunden el cambio de escritura
+// Latín→Han cuando va pegado, generando texto traslapado o glifos rotos.
+// También se evita anclar celdas combinadas en columnas demasiado angostas
+// (< 3 unidades), que es otra causa común de traslapes visuales.
 // ============================================================================
 
 const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -26,10 +33,12 @@ const allBorders = { top: thin, left: thin, bottom: thin, right: thin };
 
 // Columnas del formato oficial (47 columnas: A..AU), reducidas de tamaño para
 // que la hoja quepa en 1 página Carta y todos los cuadros de día midan igual.
+// Ninguna columna usada como ancla de celda combinada baja de 2.2 unidades,
+// para evitar el bug de traslape visual de varios visores con anclas angostas.
 // A..P (16 cols) = zona de texto/etiquetas; Q..AU (31 cols, TODAS iguales) = días 1-31
 const DAY_COL_WIDTH = 2.6;
 const COL_WIDTHS = [
-  1.5, 5, 5, 5, 5, 5, 5, 3.2, 1.5, 5, 5, 5, 5, 5, 5, 5, // A..P (concepto)
+  3, 5, 5, 5, 5, 5, 4, 2.2, 3, 5, 5, 5, 5, 5, 5, 4, // A..P (concepto)
   ...Array(31).fill(DAY_COL_WIDTH), // Q..AU (días, todos iguales)
 ];
 
@@ -88,56 +97,44 @@ export async function exportChecklistToExcel(checklist) {
   title.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
   title.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GOLD } };
 
-  // --- Fila 4-5: identificación / mes / operador ---
+  // --- Fila 4: identificación / mes / operador (una sola fila, 3 bloques) ---
   ws.mergeCells('A4:H4');
   ws.mergeCells('I4:O4');
-  ws.mergeCells('P4:AU5');
-  ws.mergeCells('A5:H5');
-  ws.mergeCells('I5:O5');
-  ws.getRow(4).height = 16;
-  ws.getRow(5).height = 15;
+  ws.mergeCells('P4:AU4');
+  ws.getRow(4).height = 26;
 
-  const forkliftLabel = ws.getCell('A4');
-  forkliftLabel.value = 'Identificación del montacargas 叉车编号:';
-  const monthLabel = ws.getCell('I4');
-  monthLabel.value = 'Mes 月';
-  const operatorCell = ws.getCell('P4');
-  operatorCell.value = `Nombre del operador操作员姓名: ${checklist.operatorName || ''}`;
-  [forkliftLabel, monthLabel].forEach((c) => {
-    c.font = { name: 'Calibri', size: 8, bold: true, color: { argb: BLACK } };
-    c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-  });
-  operatorCell.font = { name: 'Calibri', size: 8, bold: true, color: { argb: BLACK } };
-  operatorCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
-
-  const forkliftValue = ws.getCell('A5');
-  forkliftValue.value = checklist.forkliftId || '';
-  const monthValue = ws.getCell('I5');
   const monthIdx = checklist.month ?? new Date().getMonth();
-  monthValue.value = `${MONTHS_ES[monthIdx] || ''} ${MONTHS_ZH[monthIdx] || ''}  ${checklist.year || ''}`.trim();
-  [forkliftValue, monthValue].forEach((c) => {
-    c.font = { name: 'Calibri', size: 8, bold: false, color: { argb: BLACK } };
-    c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+
+  const forkliftCell = ws.getCell('A4');
+  forkliftCell.value = `Identificación del montacargas 叉车编号: ${checklist.forkliftId || ''}`;
+  const monthCell = ws.getCell('I4');
+  monthCell.value = `Mes 月: ${MONTHS_ES[monthIdx] || ''} ${MONTHS_ZH[monthIdx] || ''} ${checklist.year || ''}`.trim();
+  const operatorCell = ws.getCell('P4');
+  operatorCell.value = `Nombre del operador 操作员姓名: ${checklist.operatorName || ''}`;
+
+  [forkliftCell, monthCell, operatorCell].forEach((c) => {
+    c.font = { name: 'Calibri', size: 8, bold: true, color: { argb: BLACK } };
+    c.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
   });
 
-  // --- Fila 6: instrucciones ---
-  ws.mergeCells('A6:AU6');
-  ws.getRow(6).height = 20;
-  const instructions = ws.getCell('A6');
-  instructions.value = 'Instrucciones 说明: Marque todos los renglones indicados. 请勾选所有检查项目。 SAT: Satisfactorio 格, INS: Insatisfactorio 不合格, N/A: No Aplica 不适用。. En caso de cualquier comentario adicional utilice la parte final del formato.如有其他备注，请填写在表格末尾。';
+  // --- Fila 5: instrucciones ---
+  ws.mergeCells('A5:AU5');
+  ws.getRow(5).height = 20;
+  const instructions = ws.getCell('A5');
+  instructions.value = 'Instrucciones 说明: Marque todos los renglones indicados. 请勾选所有检查项目。 SAT: Satisfactorio 格, INS: Insatisfactorio 不合格, N/A: No Aplica 不适用。 En caso de cualquier comentario adicional utilice la parte final del formato. 如有其他备注，请填写在表格末尾。';
   instructions.font = { name: 'Calibri', size: 6.5, bold: true, color: { argb: BLACK } };
   instructions.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
 
-  // --- Fila 7: encabezado de la tabla (concepto + días 1-31) ---
-  ws.mergeCells('A7:P7');
-  ws.getRow(7).height = 13;
-  const conceptHeader = ws.getCell('A7');
+  // --- Fila 6: encabezado de la tabla (concepto + días 1-31) ---
+  ws.mergeCells('A6:P6');
+  ws.getRow(6).height = 13;
+  const conceptHeader = ws.getCell('A6');
   conceptHeader.value = 'CONCEPTO A REVISAR 检查项目';
   conceptHeader.font = { name: 'Calibri', size: 7.5, bold: true, color: { argb: BLACK } };
   conceptHeader.alignment = { horizontal: 'left', vertical: 'middle' };
 
   for (let d = 1; d <= 31; d++) {
-    const cell = ws.getCell(7, 17 + (d - 1)); // columna Q = índice 17
+    const cell = ws.getCell(6, 17 + (d - 1)); // columna Q = índice 17
     cell.value = d;
     cell.font = { name: 'Calibri', size: 6.5, bold: true, color: { argb: BLACK } };
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -147,10 +144,11 @@ export async function exportChecklistToExcel(checklist) {
     }
   }
 
-  // --- Filas 8-33: 26 conceptos de revisión ---
+  // --- Filas 7-32: 26 conceptos de revisión ---
   const dayCol = 17 + (checklist.day - 1);
+  const itemsStartRow = 7;
   checklistItems.forEach((item, idx) => {
-    const r = 8 + idx;
+    const r = itemsStartRow + idx;
     ws.mergeCells(r, 1, r, 16); // A:P
     ws.getRow(r).height = 13.5;
 
@@ -177,8 +175,8 @@ export async function exportChecklistToExcel(checklist) {
     }
   });
 
-  // --- Fila 34: nombre de quien revisa ---
-  const revRow = 34;
+  // --- Fila 33: nombre de quien revisa ---
+  const revRow = itemsStartRow + checklistItems.length; // 33
   ws.mergeCells(`A${revRow}:AU${revRow}`);
   ws.getRow(revRow).height = 16;
   const revCell = ws.getCell(`A${revRow}`);
@@ -186,16 +184,18 @@ export async function exportChecklistToExcel(checklist) {
   revCell.font = { name: 'Calibri', size: 7.5, bold: true, color: { argb: BLACK } };
   revCell.alignment = { horizontal: 'left', vertical: 'middle' };
 
-  // --- Filas 35-37: observaciones ---
-  ws.mergeCells('A35:AU37');
-  ws.getRow(35).height = 14;
-  const obsCell = ws.getCell('A35');
+  // --- Filas 34-36: observaciones ---
+  const obsRowStart = revRow + 1;
+  const obsRowEnd = obsRowStart + 2;
+  ws.mergeCells(`A${obsRowStart}:AU${obsRowEnd}`);
+  ws.getRow(obsRowStart).height = 14;
+  const obsCell = ws.getCell(`A${obsRowStart}`);
   obsCell.value = `OBSERVACIONES 备注: ${checklist.observations || ''}`;
   obsCell.font = { name: 'Calibri', size: 7.5, bold: true, color: { argb: BLACK } };
   obsCell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
 
-  // --- Bordes en toda la zona de tabla (filas 4-34) ---
-  for (let r = 4; r <= 34; r++) {
+  // --- Bordes en toda la zona de tabla (fila 4 a fin de observaciones) ---
+  for (let r = 4; r <= obsRowEnd; r++) {
     for (let c = 1; c <= 47; c++) {
       const cell = ws.getCell(r, c);
       if (!cell.border) cell.border = allBorders;
