@@ -29,8 +29,18 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        release {
+            storeFile file('../../montacontrol-release.keystore')
+            storePassword 'Branco2025'
+            keyAlias 'montacontrol'
+            keyPassword 'Branco2025'
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
@@ -43,7 +53,6 @@ repositories {
 }
 
 dependencies {
-    implementation platform('androidx.core:core-bom:1.13.1')
     implementation 'androidx.core:core:1.13.1'
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.webkit:webkit:1.11.0'
