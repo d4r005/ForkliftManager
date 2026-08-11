@@ -5,33 +5,62 @@
 // de memoria. El OCR solo se carga cuando el usuario sube una placa.
 
 /**
- * Rota una imagen (File/Blob) N grados usando un canvas, y devuelve un
- * nuevo Blob. Necesario porque muchas fotos de placas se toman en
- * cualquier ángulo y Tesseract NO corrige la rotación por sí solo en modo
- * de reconocimiento normal (solo con OSD, que es lo que usamos para
- * detectar el ángulo antes de llamar a esta función).
+ * Preprocesa una imagen en canvas para mejorar el OCR:
+ * 1. Rota N grados (si se conoce la orientación)
+ * 2. Escala 2x para que Tesseract tenga más pixeles por carácter
+ * 3. Convierte a escala de grises
+ * 4. Aumenta contraste
+ * Devuelve un nuevo Blob listo para pasar a Tesseract.
  */
-function rotateImageFile(file, degrees) {
+function preprocessImage(file, rotation = 0, scale = 2, contrast = 0.4) {
   return new Promise((resolve, reject) => {
-    if (!degrees) { resolve(file); return; }
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
-      const swap = degrees === 90 || degrees === 270;
-      const w = swap ? img.height : img.width;
-      const h = swap ? img.width : img.height;
+      const rot = ((rotation % 360) + 360) % 360;
+      const swap = rot === 90 || rot === 270;
+      const srcW = img.width;
+      const srcH = img.height;
+      const outW = (swap ? srcH : srcW) * scale;
+      const outH = (swap ? srcW : srcH) * scale;
+
       const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
+      canvas.width = outW;
+      canvas.height = outH;
       const ctx = canvas.getContext('2d');
-      ctx.translate(w / 2, h / 2);
-      ctx.rotate((degrees * Math.PI) / 180);
-      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
+      // Rotar alrededor del centro
+      ctx.translate(outW / 2, outH / 2);
+      ctx.rotate((rot * Math.PI) / 180);
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, -srcW / 2, -srcH / 2);
+
+      // Convertir a grayscale + contraste en un solo pasada de pixels
+      try {
+        const imageData = ctx.getImageData(0, 0, outW, outH);
+        const d = imageData.data;
+        const c = Math.max(0.01, 1 + contrast);
+        for (let i = 0; i < d.length; i += 4) {
+          // Luminancia (ITU-R BT.601)
+          let gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+          // Contraste: desplazar a -128..127, multiplicar, volver a 0..255
+          gray = (gray - 128) * c + 128;
+          gray = gray < 0 ? 0 : gray > 255 ? 255 : gray;
+          d[i] = d[i + 1] = d[i + 2] = gray;
+        }
+        ctx.putImageData(imageData, 0, 0);
+      } catch (e) {
+        // Si getImageData falla (CORS u otro), al menos tenemos la imagen rotada+escalada
+        console.warn('preprocess: no se pudo ajustar grayscale/contraste:', e);
+      }
+
       canvas.toBlob((blob) => {
         URL.revokeObjectURL(url);
         if (blob) resolve(blob);
-        else reject(new Error('No se pudo generar la imagen rotada'));
-      }, file.type && file.type.startsWith('image/') ? file.type : 'image/jpeg', 0.92);
+        else reject(new Error('No se pudo generar la imagen preprocesada'));
+      }, 'image/png');
     };
     img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
     img.src = url;
@@ -45,51 +74,144 @@ function rotateImageFile(file, degrees) {
  * @returns {Promise<string>} - Texto reconocido
  */
 export async function extractTextFromImage(imageFile, onProgress) {
-  // Dynamic import: tesseract.js solo se carga cuando se necesita OCR
   const Tesseract = (await import('tesseract.js')).default;
 
   // --- Paso 1: detectar orientación y guion (OSD) ---
-  // Las fotos de placas se toman en cualquier ángulo (a veces hasta de
-  // lado o al revés, como en placas fijadas en superficies verticales) y
-  // Tesseract.recognize() por sí solo NO corrige la rotación — si el
-  // texto no está aproximadamente derecho, la detección falla casi por
-  // completo (esto explica placas que "no encuentran nada"). Se usa el
-  // modelo OSD (rápido, no hace OCR completo) para detectar cuántos
-  // grados hay que rotar la imagen, y de paso qué escritura tiene
-  // (Latin/Han) para decidir si hace falta cargar el paquete de chino.
-  let imageToRecognize = imageFile;
+  let rotation = 0;
   let needsChinese = false;
   try {
     const { data } = await Tesseract.detect(imageFile);
     if (data?.orientation_degrees) {
-      imageToRecognize = await rotateImageFile(imageFile, data.orientation_degrees);
+      rotation = data.orientation_degrees;
     }
-    if (data?.script && /han/i.test(data.script)) {
+    // Tesseract OSD a veces confunde chino con japonés/coreano — cualquier
+    // script CJK activa el soporte de chino.
+    if (data?.script && /han|japanese|korean|cjk/i.test(data.script)) {
       needsChinese = true;
     }
   } catch (e) {
-    console.warn('No se pudo detectar orientación/escritura de la placa, se usa la imagen original:', e);
+    console.warn('OSD no disponible, se usa imagen original sin rotar:', e);
   }
 
-  // --- Paso 2: OCR completo ---
-  // Muchas placas de montacargas son de fabricantes chinos (HELI, Hangcha,
-  // Lonking, etc.) y mezclan texto en chino con etiquetas/números en
-  // inglés. Se agrega 'chi_sim' solo cuando el OSD detectó escritura Han,
-  // para no pagar la descarga extra del paquete de chino en placas
-  // normales en español/inglés.
-  const langs = needsChinese ? 'eng+spa+chi_sim' : 'eng+spa';
-  const result = await Tesseract.recognize(
-    imageToRecognize,
-    langs,
-    {
+  // --- Paso 2: preprocesar imagen (rotar + escalar + grayscale + contraste) ---
+  let processedImage;
+  try {
+    processedImage = await preprocessImage(imageFile, rotation, 2, 0.4);
+  } catch (e) {
+    console.warn('preprocess falló, usando imagen original:', e);
+    processedImage = imageFile;
+  }
+
+  // --- Paso 3: OCR completo ---
+  const langs = needsChinese ? 'chi_sim+eng+spa' : 'eng+spa';
+
+  let bestText = '';
+  let bestConfidence = -1;
+
+  // Intento 1: imagen preprocesada con PSM por defecto
+  try {
+    const worker = await Tesseract.createWorker(langs, 1, {
       logger: (m) => {
-        if (m.status === 'recognizing text' && onProgress) {
-          onProgress(m.progress);
-        }
+        if (m.status === 'recognizing text' && onProgress) onProgress(m.progress);
       },
+    });
+    const { data } = await worker.recognize(processedImage);
+    await worker.terminate();
+    if (data.confidence > bestConfidence) {
+      bestText = data.text || '';
+      bestConfidence = data.confidence;
     }
-  );
-  return result.data.text || '';
+  } catch (e) {
+    console.warn('OCR intento 1 falló:', e);
+  }
+
+  // Intento 2: si el primero dio confianza baja, probar con más escala y PSM 6
+  if (bestConfidence < 50) {
+    try {
+      if (onProgress) onProgress(0);
+      const img2 = await preprocessImage(imageFile, rotation, 3, 0.5);
+      const worker2 = await Tesseract.createWorker(langs, 1, {
+        logger: (m) => {
+          if (m.status === 'recognizing text' && onProgress) onProgress(m.progress);
+        },
+      });
+      await worker2.setParameters({ tessedit_pageseg_mode: 6 });
+      const { data } = await worker2.recognize(img2);
+      await worker2.terminate();
+      if (data.confidence > bestConfidence) {
+        bestText = data.text || '';
+        bestConfidence = data.confidence;
+      }
+    } catch (e) {
+      console.warn('OCR intento 2 falló:', e);
+    }
+  }
+
+  // Intento 3: si aún no hay nada, probar rotación 180 sin OSD
+  if (bestConfidence < 35) {
+    try {
+      if (onProgress) onProgress(0);
+      const img3 = await preprocessImage(imageFile, (rotation + 180) % 360, 3, 0.5);
+      const worker3 = await Tesseract.createWorker(langs, 1, {
+        logger: (m) => {
+          if (m.status === 'recognizing text' && onProgress) onProgress(m.progress);
+        },
+      });
+      await worker3.setParameters({ tessedit_pageseg_mode: 6 });
+      const { data } = await worker3.recognize(img3);
+      await worker3.terminate();
+      if (data.confidence > bestConfidence) {
+        bestText = data.text || '';
+        bestConfidence = data.confidence;
+      }
+    } catch (e) {
+      console.warn('OCR intento 3 falló:', e);
+    }
+  }
+
+  return bestText;
+}
+
+// ============================================================
+//  Parser tolerante a errores de OCR
+// ============================================================
+
+/**
+ * Normaliza texto para comparaciones fuzzy: mayúsculas, sin acentos,
+ * sin espacios extra. Permite buscar keywords incluso cuando el OCR
+ * introdujo errores leves.
+ */
+function normalize(s) {
+  return s
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // quitar acentos
+    .replace(/[^A-Z0-9]/g, '');       // solo letras y números
+}
+
+/**
+ * Busca si un conjunto de keywords aparece en el texto normalizado.
+ * Usa distancia de Levenshtein ligera (hasta 2 sustituciones) para
+ * tolerar errores típicos del OCR.
+ */
+function fuzzyIncludes(cleanText, keyword, maxDist = 2) {
+  const nk = normalize(keyword);
+  if (cleanText.includes(nk)) return true;
+  // Si el keyword es corto (<=4), no fuzzy-match — demasiado falso positivo
+  if (nk.length <= 4) return false;
+  // Buscar ventanas del mismo tamaño y comparar
+  for (let i = 0; i <= cleanText.length - nk.length; i++) {
+    let dist = 0;
+    const slice = cleanText.slice(i, i + nk.length);
+    for (let j = 0; j < nk.length; j++) {
+      if (slice[j] !== nk[j]) {
+        dist++;
+        if (dist > maxDist) break;
+      }
+    }
+    if (dist <= maxDist) return true;
+  }
+  return false;
 }
 
 /**
@@ -100,50 +222,57 @@ export async function extractTextFromImage(imageFile, onProgress) {
  */
 export function parseForkliftPlateData(text) {
   const result = {
-    brand: null,        // Marca (Toyota, Clark, Hyster, etc.)
-    model: null,        // Modelo
-    serialNumber: null, // Número de serie
-    capacity: null,     // Capacidad de carga (kg)
-    capacityUnit: null,  // Unidad (kg, lbs)
-    powerType: null,     // Tipo de energía (Eléctrico, Gas, Diesel, GLP)
-    mastType: null,      // Tipo de mástil
-    maxLiftHeight: null, // Altura máxima de elevación (mm)
-    tireType: null,      // Tipo de llantas
-    manufactureYear: null, // Año de fabricación
-    voltage: null,       // Voltaje (si eléctrico)
-    weight: null,        // Peso del equipo
+    brand: null,
+    model: null,
+    serialNumber: null,
+    capacity: null,
+    capacityUnit: null,
+    powerType: null,
+    mastType: null,
+    maxLiftHeight: null,
+    tireType: null,
+    manufactureYear: null,
+    voltage: null,
+    weight: null,
   };
 
   const lines = text.split('\n').map(l => l.trim()).filter(l => l);
-  const cleanText = text.replace(/\s+/g, ' ').trim().toUpperCase();
+  const cleanText = normalize(text);
 
   // === MARCA ===
   const brands = [
     'TOYOTA', 'CLARK', 'HYSTER', 'YALE', 'CAT', 'CATERPILLAR',
     'MITSUBISHI', 'KOMATSU', 'NISSAN', 'TCM', 'DAEWOO', 'DOOSAN',
     'BT', 'CROWN', 'JUNGHEINRICH', 'STILL', 'LINDE', 'REACH',
-    'HYSTER-YALE', 'HELIM', 'EP', 'BOLZONI', 'AYT', 'HANGCHA',
-    'LONKING', 'HELI', 'DF', 'ANHUI'
+    'HYSTER-YALE', 'HELI', 'EP', 'BOLZONI', 'AYT', 'HANGCHA',
+    'LONKING', 'ANHUI'
   ];
 
+  // Marcas cortas (<=3 letras) requieren coincidencia exacta en
+  // boundary de palabra — un 'DF' dentro de 'NEDFORK' NO es la marca DF.
   for (const brand of brands) {
-    if (cleanText.includes(brand)) {
+    if (brand.length <= 3) {
+      const re = new RegExp(`(?:^|[^A-Z])${brand}(?:[^A-Z]|$)`, 'i');
+      if (re.test(text)) {
+        result.brand = capitalize(brand);
+        break;
+      }
+    } else if (fuzzyIncludes(cleanText, brand, 1)) {
       result.brand = capitalize(brand);
       break;
     }
   }
 
   // === MODELO ===
-  // "Configuration No." es el equivalente a "modelo" en placas de
-  // fabricantes chinos (HELI, Hangcha, etc.) — se agrega antes de los
-  // patrones genéricos MODELO/MODEL para que tenga prioridad.
+  // "Configuration No." en placas chinas; "Model"/"Modelo" en placas estándar.
   const modelPatterns = [
-    /CONFIGURATION\s*(?:NO\.?)?[:\.\s]*([A-Z0-9\-\/\. \t]{3,20})/i,
-    /MODELO[:\s]*([A-Z0-9\-\/\. \t]{3,20})/i,
-    /MODEL[:\s]*([A-Z0-9\-\/\. \t]{3,20})/i,
-    /M\/M[:\s]*([A-Z0-9\-\/\. \t]{3,20})/i,
-    /TIPO[:\s]*([A-Z0-9\-\/\. \t]{3,20})/i,
-    /TYPE[:\s]*([A-Z0-9\-\/\. \t]{3,20})/i,
+    /CONFIGURATION\s*(?:NO\.?)?[:\.\s]*([A-Z0-9\-\/\. ]{3,20})/i,
+    /EVIFIGURATION\s*(?:NO\.?)?[:\.\s]*([A-Z0-9\-\/\. ]{3,20})/i, // OCR error común
+    /MODELO[:\s]*([A-Z0-9\-\/\. ]{3,20})/i,
+    /MODEL[:\s]*([A-Z0-9\-\/\. ]{3,20})/i,
+    /M\/M[:\s]*([A-Z0-9\-\/\. ]{3,20})/i,
+    /TIPO[:\s]*([A-Z0-9\-\/\. ]{3,20})/i,
+    /TYPE[:\s]*([A-Z0-9\-\/\. ]{3,20})/i,
   ];
   for (const mp of modelPatterns) {
     const m = text.match(mp);
@@ -154,9 +283,6 @@ export function parseForkliftPlateData(text) {
   }
 
   // === NÚMERO DE SERIE ===
-  // [:\.\s]* (en vez de [:\s]*) para tolerar el punto de "Serial No." /
-  // "Ser. No." antes del valor — con solo [:\s]* el punto quedaba fuera
-  // de la clase de caracteres permitida y la coincidencia fallaba.
   const serialPatterns = [
     /(?:N[UÚ]MERO\s*(?:DE\s*)?SERIE|SERIAL\s*(?:NUMBER|NO|N[º°\.])?|SER\.?\s*NO\.?|S\/N)[:\.\s]*([A-Z0-9\-]{5,30})/i,
     /(?:NO\.?\s*(?:DE\s*)?SERIE|SERIE)[:\.\s]*([A-Z0-9\-]{5,30})/i,
@@ -171,6 +297,8 @@ export function parseForkliftPlateData(text) {
   }
 
   // === CAPACIDAD ===
+  // Solo si viene explícitamente etiquetada como capacidad/carga/load.
+  // "Device Weight" NO es capacidad — se maneja en peso.
   const capacityPatterns = [
     /(?:CAPACIDAD|CAPACITY|CARGA|LOAD|RATED\s*(?:CAPACITY|LOAD))[:\.\s]*(\d[\d,\.]*)\s*(KG|KGS|LB|LBS|TON|TONS)?/i,
     /(\d[\d,\.]*)\s*(KG|KGS|TON)\s*(?:DE\s*)?(?:CAPACIDAD|CARGA|LOAD)/i,
@@ -186,6 +314,7 @@ export function parseForkliftPlateData(text) {
   }
 
   // === TIPO DE ENERGÍA ===
+  // Usa fuzzy matching para tolerar errores del OCR como "CONTERBAANED"
   const powerKeywords = [
     { kw: ['ELÉCTRICO', 'ELECTRICO', 'ELECTRIC', 'BATERÍA', 'BATERIA'], val: 'Eléctrico' },
     { kw: ['DIESEL', 'DIÉSEL'], val: 'Diesel' },
@@ -195,7 +324,7 @@ export function parseForkliftPlateData(text) {
     { kw: ['INTERNAL COMBUSTION', 'COMBUSTI[OÓ]N INTERNA'], val: 'Combustión interna' },
   ];
   for (const p of powerKeywords) {
-    if (p.kw.some(k => cleanText.includes(k))) {
+    if (p.kw.some(k => fuzzyIncludes(cleanText, k, 2))) {
       result.powerType = p.val;
       break;
     }
@@ -209,7 +338,7 @@ export function parseForkliftPlateData(text) {
     { kw: ['QUAD', '4 ETAPAS', 'FOUR STAGE'], val: 'Quádruple' },
   ];
   for (const m of mastKeywords) {
-    if (m.kw.some(k => cleanText.includes(k))) {
+    if (m.kw.some(k => fuzzyIncludes(cleanText, k, 1))) {
       result.mastType = m.val;
       break;
     }
@@ -235,16 +364,13 @@ export function parseForkliftPlateData(text) {
     { kw: ['POLIURETANO', 'POLYURETHANE', 'PU'], val: 'Poliuretano' },
   ];
   for (const t of tireKeywords) {
-    if (t.kw.some(k => cleanText.includes(k))) {
+    if (t.kw.some(k => fuzzyIncludes(cleanText, k, 1))) {
       result.tireType = t.val;
       break;
     }
   }
 
   // === AÑO DE FABRICACIÓN ===
-  // "Manufacture Date" en placas chinas suele venir como fecha completa
-  // (AAAA-MM-DD o AA-MM-DD) en vez de solo el año — se busca primero
-  // junto a esa etiqueta específica antes de caer al patrón genérico.
   const mfgDateMatch = cleanText.match(/MANUFACTURE\s*DATE[:\.\s]*(\d{2,4})[\-\/.](\d{1,2})[\-\/.](\d{1,2})/);
   if (mfgDateMatch) {
     let yr = mfgDateMatch[1];
@@ -257,7 +383,7 @@ export function parseForkliftPlateData(text) {
   if (!result.manufactureYear) {
     const yearPatterns = [
       /(?:AÑO|YEAR|FABRICACI[OÓ]N|MANUFACTURE)[:\s]*(\d{4})/i,
-      /\b(19[89]\d|20[0-2]\d)\b/, // Año directo
+      /\b(19[89]\d|20[0-2]\d)\b/,
     ];
     for (const yp of yearPatterns) {
       const m = text.match(yp);
@@ -278,11 +404,21 @@ export function parseForkliftPlateData(text) {
   }
 
   // === PESO ===
-  // "Device Weight" es la etiqueta usada en placas de fabricantes chinos
-  // (peso del propio equipo, no la capacidad de carga).
-  const weightMatch = text.match(/(?:DEVICE\s*WEIGHT|PESO|WEIGHT|MASA)[:\.\s]*(\d[\d,\.]*)\s*(KG|KGS|TON)?/i);
+  // "Device Weight" en placas chinas; "Peso"/"Weight" en estándar.
+  // Se tolera "ko" como error de OCR de "kg".
+  const weightMatch = text.match(/(?:DEVICE\s*WEIGHT|PESO|WEIGHT|MASA)[:\.\s]*(\d[\d,\.]*)\s*(KG|KGS|KO|TON)?/i);
   if (weightMatch) {
     result.weight = weightMatch[1].replace(/[,\.]/g, '');
+  }
+
+  // === FALLBACK: buscar números sueltos cerca de "kg" que no sean capacidad ===
+  // Si no se encontró capacidad ni peso, pero hay un número + kg en el texto,
+  // es probablemente el peso del equipo (más común en placas chinas).
+  if (!result.capacity && !result.weight) {
+    const kgMatch = text.match(/(\d{3,5})\s*(?:kg|ko|kgs)/i);
+    if (kgMatch) {
+      result.weight = kgMatch[1].replace(/[,\.]/g, '');
+    }
   }
 
   // Contar cuántos campos se encontraron

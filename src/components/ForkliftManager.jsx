@@ -128,6 +128,23 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
         const parsed = parseForkliftPlateData(text);
         if (parsed._foundCount > 0) {
           setExtractedData(parsed);
+          // Auto-aplicar los datos al formulario inmediatamente,
+          // sin requerir que el usuario presione "Aplicar datos".
+          setFormData(prev => ({
+            ...prev,
+            brand: parsed.brand || prev.brand,
+            model: parsed.model || prev.model,
+            serialNumber: parsed.serialNumber || prev.serialNumber,
+            capacity: parsed.capacity || prev.capacity,
+            capacityUnit: (parsed.capacityUnit || prev.capacityUnit).toLowerCase(),
+            powerType: parsed.powerType || prev.powerType,
+            mastType: parsed.mastType || prev.mastType,
+            maxLiftHeight: parsed.maxLiftHeight || prev.maxLiftHeight,
+            tireType: parsed.tireType || prev.tireType,
+            manufactureYear: parsed.manufactureYear || prev.manufactureYear,
+            voltage: parsed.voltage || prev.voltage,
+            weight: parsed.weight || prev.weight,
+          }));
           showAlert('info', t('fkOcrDataFound'));
         } else {
           showAlert('warning', t('fkOcrNoData'));
