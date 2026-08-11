@@ -10,6 +10,10 @@ android/.gradle/
 android/local.properties
 android/app/src/main/assets/web/
 android/app/src/main/assets/public/
+android/app/capacitor.build.gradle
+android/app/src/main/assets/capacitor.plugins.json
+android/capacitor.settings.gradle
+android/capacitor-cordova-android-plugins/
 
 # Local environments and temp folders
 .*_home/
