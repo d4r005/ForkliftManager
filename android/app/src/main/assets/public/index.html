@@ -6,17 +6,17 @@
     <meta name="theme-color" content="#1a73e8" />
     <meta name="description" content="Sistema de checklist de inspección de montacargas | Forklift inspection checklist system | 叉车检查记录系统 | Hệ thống kiểm tra xe nâng" />
     <title>ForkliftManager — Checklist de Montacargas</title>
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <script type="module" crossorigin src="/assets/index-CoTS22tk.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/vendor-DJ1oPbzn.js">
-    <link rel="modulepreload" crossorigin href="/assets/supabase-Dx0atVpp.js">
-    <link rel="modulepreload" crossorigin href="/assets/ocr-BK1hTlth.js">
-    <link rel="modulepreload" crossorigin href="/assets/excel-CKN5doRT.js">
-    <link rel="modulepreload" crossorigin href="/assets/pdf-Bsv9YobB.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-QcJU7rdh.css">
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <script type="module" crossorigin src="./assets/index-CqB6V1cR.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/vendor-DJ1oPbzn.js">
+    <link rel="modulepreload" crossorigin href="./assets/supabase-Dx0atVpp.js">
+    <link rel="modulepreload" crossorigin href="./assets/ocr-BK1hTlth.js">
+    <link rel="modulepreload" crossorigin href="./assets/excel-CKN5doRT.js">
+    <link rel="modulepreload" crossorigin href="./assets/pdf-Bsv9YobB.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-QcJU7rdh.css">
   </head>
   <body>
     <div id="root">
@@ -26,7 +26,10 @@
       </div>
     </div>
     <script>
-      // Si React no reemplaza #root en 8 segundos, mostrar error visible
+      // Red de seguridad: si React no reemplazó #root en 8 segundos, algo
+      // truena antes de montar (error de JS al arrancar, no de UI). Mostramos
+      // un mensaje visible en vez de dejar la pantalla en blanco, y el error
+      // real queda en Logcat con el tag "MontaControl-JS" (ver MainActivity.kt).
       window.setTimeout(function() {
         var root = document.getElementById('root');
         var fallback = document.getElementById('boot-fallback');

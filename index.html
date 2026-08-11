@@ -12,7 +12,25 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="boot-fallback" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui,sans-serif;color:#333;">
+        <div style="font-size:48px;font-weight:700;color:#1a73e8;">FM</div>
+        <p style="margin-top:16px;font-size:16px;">Cargando ForkliftManager…</p>
+      </div>
+    </div>
+    <script>
+      // Red de seguridad: si React no reemplazó #root en 8 segundos, algo
+      // truena antes de montar (error de JS al arrancar, no de UI). Mostramos
+      // un mensaje visible en vez de dejar la pantalla en blanco, y el error
+      // real queda en Logcat con el tag "MontaControl-JS" (ver MainActivity.kt).
+      window.setTimeout(function() {
+        var root = document.getElementById('root');
+        var fallback = document.getElementById('boot-fallback');
+        if (fallback && fallback.parentNode === root) {
+          root.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui,sans-serif;color:#333;padding:20px;"><div style="font-size:48px;font-weight:700;color:#d32f2f;">FM</div><h2 style="color:#d32f2f;margin-top:16px;">Error al cargar la aplicación</h2><p style="margin-top:8px;color:#666;">No se pudo inicializar la interfaz.<br>Revisa Logcat con tag "MontaControl-JS".</p><button style="margin-top:24px;padding:12px 24px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:16px;cursor:pointer;" onclick="location.reload()">Reintentar</button></div>';
+        }
+      }, 8000);
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
