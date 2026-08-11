@@ -65,8 +65,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Call Google Gemini API (gemini-1.5-flash — fast, cheap, supports vision)
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${geminiKey}`;
+    // Call Google Gemini API (gemini-flash-lite-latest — fast, no reasoning overhead, supports vision)
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${geminiKey}`;
 
     const geminiBody = {
       contents: [{
@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
       }],
       generationConfig: {
         temperature: 0,
-        maxOutputTokens: 1000,
+        maxOutputTokens: 1500,
       },
     };
 
