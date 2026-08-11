@@ -266,28 +266,38 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 2px;
   border: none;
   background: transparent;
   cursor: pointer;
   color: var(--text-secondary);
   transition: var(--transition);
-  flex: 1;
+  flex: 1 1 0;
+  /* CRÍTICO: sin min-width:0 un flex-item nunca se encoge más allá del ancho
+     natural de su contenido (default min-width:auto). Con 6 botones y
+     labels en white-space:nowrap, esto hacía que se salieran de su columna
+     y se traslaparan con el botón vecino en vez de truncarse con "...". */
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   height: 100%;
+  padding: 4px 1px;
   position: relative;
 }
 
 .bottom-nav-btn .nav-icon {
-  font-size: 20px;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .bottom-nav-btn .nav-label {
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   width: 100%;
+  max-width: 100%;
   text-align: center;
 }
 

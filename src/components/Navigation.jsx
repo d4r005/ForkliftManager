@@ -6,7 +6,17 @@ export default function Navigation({ view, setView, checklistCount, isAdmin }) {
   const platform = Capacitor.getPlatform();
   const isAndroid = platform === 'android';
 
-  const navItems = [
+  // En Android usamos labels cortos (Dashboard, Usuarios, ...) porque el
+  // bottom-nav tiene poco espacio horizontal con hasta 6 botones — con los
+  // labels completos ("Panel principal", "Gestión de usuarios") el texto se
+  // salía de su columna y se traslapaba con el botón vecino.
+  const navItems = isAndroid ? [
+    { id: 'dashboard', label: t('navDashboard'), icon: '📊' },
+    { id: 'list', label: t('navList'), icon: '📋', badge: checklistCount },
+    { id: 'form', label: t('navNew'), icon: '➕' },
+    { id: 'forklifts', label: t('navForklifts'), icon: '🚜' },
+    { id: 'expedientes', label: t('navExp'), icon: '📁' },
+  ] : [
     { id: 'dashboard', label: t('dashboard'), icon: '📊' },
     { id: 'list', label: t('savedChecklists'), icon: '📋', badge: checklistCount },
     { id: 'form', label: t('newChecklist'), icon: '➕' },
@@ -15,7 +25,7 @@ export default function Navigation({ view, setView, checklistCount, isAdmin }) {
   ];
 
   if (isAdmin) {
-    navItems.push({ id: 'users', label: t('userManagement'), icon: '👥' });
+    navItems.push({ id: 'users', label: isAndroid ? t('navUsers') : t('userManagement'), icon: '👥' });
   }
 
   if (isAndroid) {

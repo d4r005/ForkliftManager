@@ -1,6 +1,7 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { checklistItems } from '../data/checklistItems.js';
+import { saveOrShareFile } from './saveOrShareFile.js';
 import nafLogoUrl from '../assets/bitacora-naf-logo.png';
 import shelserLogoUrl from '../assets/bitacora-shelser-logo.png';
 import notoRegularUrl from '../assets/NotoSansSC-Regular.ttf';
@@ -319,11 +320,7 @@ export async function exportChecklistToPdf(checklist) {
   // --- Guardar ---
   const pdfBytes = await pdfDoc.save();
   const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
   const dateStr = `${checklist.year}-${String((checklist.month ?? 0) + 1).padStart(2, '0')}-${String(checklist.day).padStart(2, '0')}`;
-  link.download = `Bitacora_${checklist.forkliftId || 'SN'}_${dateStr}.pdf`;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 100);
+  const fileName = `Bitacora_${checklist.forkliftId || 'SN'}_${dateStr}.pdf`;
+  await saveOrShareFile(blob, fileName, 'application/pdf');
 }

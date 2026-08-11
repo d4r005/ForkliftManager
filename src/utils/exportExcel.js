@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import { checklistItems } from '../data/checklistItems.js';
+import { saveOrShareFile } from './saveOrShareFile.js';
 import nafLogoUrl from '../assets/bitacora-naf-logo.png';
 import shelserLogoUrl from '../assets/bitacora-shelser-logo.png';
 
@@ -222,10 +223,5 @@ export async function exportChecklistToExcel(checklist) {
 
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 100);
+  await saveOrShareFile(blob, fileName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 }
