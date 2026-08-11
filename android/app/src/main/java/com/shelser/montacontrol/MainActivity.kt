@@ -1,14 +1,10 @@
 package com.shelser.montacontrol
 
 import android.os.Bundle
-import android.util.Log
 import android.view.WindowManager
-import android.webkit.WebChromeClient
-import android.webkit.ConsoleMessage
 import com.getcapacitor.BridgeActivity
 
 class MainActivity : BridgeActivity() {
-    private val TAG = "MontaControl"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -22,21 +18,15 @@ class MainActivity : BridgeActivity() {
         )
         */
 
-        try {
-            val bridgeWebView = bridge.webView
-            if (bridgeWebView != null) {
-                bridgeWebView.webChromeClient = object : WebChromeClient() {
-                    override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                        Log.d(
-                            "$TAG-JS",
-                            "[${consoleMessage.messageLevel()}] ${consoleMessage.message()} (${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})"
-                        )
-                        return true
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error setting up WebView logging", e)
-        }
+        // NOTA: No reemplazar bridge.webView.webChromeClient aquí.
+        // Capacitor instala BridgeWebChromeClient, que maneja:
+        //   - onShowFileChooser → <input type="file"> (subir fotos, placa, etc.)
+        //   - onConsoleMessage → logs de JS en Logcat (tag "Console")
+        //   - onGeolocationPermissionsShowPrompt
+        //   - permisos de cámara para captura directa
+        // Si se sobreescribe con un WebChromeClient plano, se pierden TODOS esos
+        // handlers y los <input type="file"> dejan de funcionar en Android.
+        // El logging de consola que se agregó aquí durante el debugging de la
+        // pantalla en blanco ya viene incluido por defecto en BridgeWebChromeClient.
     }
 }

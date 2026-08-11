@@ -1,4 +1,8 @@
-import Tesseract from 'tesseract.js';
+// OCR para extraer texto de la placa de datos del montacargas.
+// Se usa import dinámico de tesseract.js para que el bundle principal no
+// incluya WASM/Web Workers pesados al arrancar — especialmente importante
+// en Android WebView, donde cargar todo de golpe puede causar problemas
+// de memoria. El OCR solo se carga cuando el usuario sube una placa.
 
 /**
  * Extrae texto de una imagen usando OCR (Tesseract.js)
@@ -7,6 +11,8 @@ import Tesseract from 'tesseract.js';
  * @returns {Promise<string>} - Texto reconocido
  */
 export async function extractTextFromImage(imageFile, onProgress) {
+  // Dynamic import: tesseract.js solo se carga cuando se necesita OCR
+  const Tesseract = (await import('tesseract.js')).default;
   const result = await Tesseract.recognize(
     imageFile,
     'spa+eng',
@@ -33,14 +39,14 @@ export function parseForkliftPlateData(text) {
     model: null,        // Modelo
     serialNumber: null, // Número de serie
     capacity: null,     // Capacidad de carga (kg)
-    capacityUnit: null, // Unidad (kg, lbs)
-    powerType: null,    // Tipo de energía (Eléctrico, Gas, Diesel, GLP)
-    mastType: null,     // Tipo de mástil
+    capacityUnit: null,  // Unidad (kg, lbs)
+    powerType: null,     // Tipo de energía (Eléctrico, Gas, Diesel, GLP)
+    mastType: null,      // Tipo de mástil
     maxLiftHeight: null, // Altura máxima de elevación (mm)
-    tireType: null,     // Tipo de llantas
+    tireType: null,      // Tipo de llantas
     manufactureYear: null, // Año de fabricación
-    voltage: null,      // Voltaje (si eléctrico)
-    weight: null,      // Peso del equipo
+    voltage: null,       // Voltaje (si eléctrico)
+    weight: null,        // Peso del equipo
   };
 
   const lines = text.split('\n').map(l => l.trim()).filter(l => l);
@@ -63,7 +69,6 @@ export function parseForkliftPlateData(text) {
   }
 
   // === MODELO ===
-  // Buscar "MODELO" o "MODEL" seguido de alfanumérico
   const modelPatterns = [
     /MODELO[:\s]*([A-Z0-9\-\/\.\s]{3,20})/i,
     /MODEL[:\s]*([A-Z0-9\-\/\.\s]{3,20})/i,
