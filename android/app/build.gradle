@@ -34,9 +34,7 @@ android {
 
     buildTypes {
         release {
-            // Usamos la firma de debug temporalmente para que sea instalable
-            // pero con optimizaciones de release (más rápida y pequeña)
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
