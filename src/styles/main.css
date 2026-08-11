@@ -230,6 +230,12 @@ body {
   display: none;
 }
 
+.platform-android .app-header {
+  /* Android 15+ (targetSdk 36) dibuja la app edge-to-edge por default;
+     sin esto el header queda debajo de la barra de estado del sistema. */
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
 .platform-android .bottom-nav {
   position: fixed;
   bottom: 0;
