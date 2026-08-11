@@ -9,6 +9,16 @@ android/app/build/
 android/.gradle/
 android/local.properties
 android/app/src/main/assets/web/
+android/app/src/main/assets/public/
+
+# Local environments and temp folders
+.*_home/
+.android_local/
+temp_*/
+clean_*/
+fake_home/
+final_home/
+wrapper_fix/
 
 # IDE
 .vscode/
@@ -30,8 +40,9 @@ npm-debug.log*
 # Wrangler
 .wrangler/
 
-# Keystore credentials (local only)
-android/keystore.properties
+# Assets & Screenshots
+*.png
 
-# Keystore file (local only — sensitive)
-montacontrol-release.keystore
+# Keystore credentials (local only)
+keystore.properties
+android/keystore.properties
