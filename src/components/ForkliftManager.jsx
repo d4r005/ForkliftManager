@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useLang } from '../i18n/LanguageContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
-import { extractTextFromImage, parseForkliftPlateData } from '../utils/ocrExtract.js';
+import { extractPlateDataWithAI, extractTextFromImage, parseForkliftPlateData } from '../utils/ocrExtract.js';
 
 export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }) {
   const { t } = useLang();
@@ -119,39 +119,58 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
     const target = fileTarget.current;
     setUploading(true);
 
-    // Si es placa de datos, correr OCR
+    // Si es placa de datos, extraer con IA primero, fallback a OCR local
     if (target === 'plate') {
       setOcrProcessing(true);
       setOcrProgress(0);
+      let parsed = null;
+
+      // --- Intento 1: IA (Google Gemini vía backend function) ---
       try {
-        const text = await extractTextFromImage(file, (p) => setOcrProgress(p));
-        const parsed = parseForkliftPlateData(text);
-        if (parsed._foundCount > 0) {
-          setExtractedData(parsed);
-          // Auto-aplicar los datos al formulario inmediatamente,
-          // sin requerir que el usuario presione "Aplicar datos".
-          setFormData(prev => ({
-            ...prev,
-            brand: parsed.brand || prev.brand,
-            model: parsed.model || prev.model,
-            serialNumber: parsed.serialNumber || prev.serialNumber,
-            capacity: parsed.capacity || prev.capacity,
-            capacityUnit: (parsed.capacityUnit || prev.capacityUnit).toLowerCase(),
-            powerType: parsed.powerType || prev.powerType,
-            mastType: parsed.mastType || prev.mastType,
-            maxLiftHeight: parsed.maxLiftHeight || prev.maxLiftHeight,
-            tireType: parsed.tireType || prev.tireType,
-            manufactureYear: parsed.manufactureYear || prev.manufactureYear,
-            voltage: parsed.voltage || prev.voltage,
-            weight: parsed.weight || prev.weight,
-          }));
-          showAlert('info', t('fkOcrDataFound'));
-        } else {
-          showAlert('warning', t('fkOcrNoData'));
+        const aiData = await extractPlateDataWithAI(file, (p) => setOcrProgress(p));
+        if (aiData) {
+          parsed = aiData;
+          parsed._foundCount = Object.values(aiData).filter(v => v !== null).length;
+          console.log('Placa leída con IA:', parsed);
         }
       } catch (err) {
-        console.error('OCR error:', err);
-        showAlert('warning', t('fkOcrError'));
+        console.warn('IA plate extraction falló, usando OCR local:', err);
+      }
+
+      // --- Intento 2: OCR local (Tesseract) como fallback ---
+      if (!parsed || parsed._foundCount === 0) {
+        try {
+          setOcrProgress(0);
+          const text = await extractTextFromImage(file, (p) => setOcrProgress(p));
+          parsed = parseForkliftPlateData(text);
+          console.log('Placa leída con OCR local:', parsed);
+        } catch (err) {
+          console.error('OCR local también falló:', err);
+        }
+      }
+
+      // --- Aplicar resultados al formulario ---
+      if (parsed && parsed._foundCount > 0) {
+        setExtractedData(parsed);
+        // Auto-aplicar los datos al formulario inmediatamente
+        setFormData(prev => ({
+          ...prev,
+          brand: parsed.brand || prev.brand,
+          model: parsed.model || prev.model,
+          serialNumber: parsed.serialNumber || prev.serialNumber,
+          capacity: parsed.capacity || prev.capacity,
+          capacityUnit: (parsed.capacityUnit || prev.capacityUnit).toLowerCase(),
+          powerType: parsed.powerType || prev.powerType,
+          mastType: parsed.mastType || prev.mastType,
+          maxLiftHeight: parsed.maxLiftHeight || prev.maxLiftHeight,
+          tireType: parsed.tireType || prev.tireType,
+          manufactureYear: parsed.manufactureYear || prev.manufactureYear,
+          voltage: parsed.voltage || prev.voltage,
+          weight: parsed.weight || prev.weight,
+        }));
+        showAlert('info', t('fkOcrDataFound'));
+      } else {
+        showAlert('warning', t('fkOcrNoData'));
       }
       setOcrProcessing(false);
     }

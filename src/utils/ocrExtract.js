@@ -1,8 +1,74 @@
 // OCR para extraer texto de la placa de datos del montacargas.
-// Se usa import dinámico de tesseract.js para que el bundle principal no
-// incluya WASM/Web Workers pesados al arrancar — especialmente importante
-// en Android WebView, donde cargar todo de golpe puede causar problemas
-// de memoria. El OCR solo se carga cuando el usuario sube una placa.
+//
+// ESTRATEGIA: primero intenta IA (Google Gemini vía backend function) que
+// puede leer chino, inglés y español sin importar rotación o glare.
+// Si la IA falla (sin internet, timeout, etc.), cae al OCR local con
+// Tesseract.js como respaldo.
+
+// URL del backend function de Base44 que usa Gemini AI vision.
+const AI_ENDPOINT = 'https://koda-4464c65e.base44.app/functions/extractForkliftPlateData';
+
+/**
+ * Convierte un File/Blob a base64 (sin el prefijo data:).
+ */
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      // Quitar el prefijo "data:image/jpeg;base64,"
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Extrae datos de la placa usando IA (Google Gemini vía backend function).
+ * Mucho más preciso que OCR tradicional — lee chino, inglés, español,
+ * y tolera fotos rotadas o con glare.
+ *
+ * @param {File} imageFile - Foto de la placa
+ * @param {Function} onProgress - Callback de progreso (0-1)
+ * @returns {Promise<object|null>} - Datos estructurados o null si falla
+ */
+export async function extractPlateDataWithAI(imageFile, onProgress) {
+  if (onProgress) onProgress(0.1);
+
+  const base64 = await fileToBase64(imageFile);
+  if (onProgress) onProgress(0.3);
+
+  const response = await fetch(AI_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      image: base64,
+      mimeType: imageFile.type || 'image/jpeg',
+    }),
+  });
+
+  if (onProgress) onProgress(0.7);
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || `Backend function returned ${response.status}`);
+  }
+
+  const result = await response.json();
+  if (onProgress) onProgress(1);
+
+  if (!result.success || !result.data || result.foundCount === 0) {
+    return null;
+  }
+
+  return result.data;
+}
+
+// ============================================================
+//  OCR LOCAL CON TESSERACT (fallback)
+// ============================================================
 
 /**
  * Preprocesa una imagen en canvas para mejorar el OCR:
@@ -173,7 +239,7 @@ export async function extractTextFromImage(imageFile, onProgress) {
 }
 
 // ============================================================
-//  Parser tolerante a errores de OCR
+//  Parser tolerante a errores de OCR (para el fallback de Tesseract)
 // ============================================================
 
 /**
@@ -248,8 +314,6 @@ export function parseForkliftPlateData(text) {
     'LONKING', 'ANHUI'
   ];
 
-  // Marcas cortas (<=3 letras) requieren coincidencia exacta en
-  // boundary de palabra — un 'DF' dentro de 'NEDFORK' NO es la marca DF.
   for (const brand of brands) {
     if (brand.length <= 3) {
       const re = new RegExp(`(?:^|[^A-Z])${brand}(?:[^A-Z]|$)`, 'i');
@@ -264,10 +328,9 @@ export function parseForkliftPlateData(text) {
   }
 
   // === MODELO ===
-  // "Configuration No." en placas chinas; "Model"/"Modelo" en placas estándar.
   const modelPatterns = [
     /CONFIGURATION\s*(?:NO\.?)?[:\.\s]*([A-Z0-9\-\/\. ]{3,20})/i,
-    /EVIFIGURATION\s*(?:NO\.?)?[:\.\s]*([A-Z0-9\-\/\. ]{3,20})/i, // OCR error común
+    /EVIFIGURATION\s*(?:NO\.?)?[:\.\s]*([A-Z0-9\-\/\. ]{3,20})/i,
     /MODELO[:\s]*([A-Z0-9\-\/\. ]{3,20})/i,
     /MODEL[:\s]*([A-Z0-9\-\/\. ]{3,20})/i,
     /M\/M[:\s]*([A-Z0-9\-\/\. ]{3,20})/i,
@@ -297,8 +360,6 @@ export function parseForkliftPlateData(text) {
   }
 
   // === CAPACIDAD ===
-  // Solo si viene explícitamente etiquetada como capacidad/carga/load.
-  // "Device Weight" NO es capacidad — se maneja en peso.
   const capacityPatterns = [
     /(?:CAPACIDAD|CAPACITY|CARGA|LOAD|RATED\s*(?:CAPACITY|LOAD))[:\.\s]*(\d[\d,\.]*)\s*(KG|KGS|LB|LBS|TON|TONS)?/i,
     /(\d[\d,\.]*)\s*(KG|KGS|TON)\s*(?:DE\s*)?(?:CAPACIDAD|CARGA|LOAD)/i,
@@ -314,7 +375,6 @@ export function parseForkliftPlateData(text) {
   }
 
   // === TIPO DE ENERGÍA ===
-  // Usa fuzzy matching para tolerar errores del OCR como "CONTERBAANED"
   const powerKeywords = [
     { kw: ['ELÉCTRICO', 'ELECTRICO', 'ELECTRIC', 'BATERÍA', 'BATERIA'], val: 'Eléctrico' },
     { kw: ['DIESEL', 'DIÉSEL'], val: 'Diesel' },
@@ -404,16 +464,12 @@ export function parseForkliftPlateData(text) {
   }
 
   // === PESO ===
-  // "Device Weight" en placas chinas; "Peso"/"Weight" en estándar.
-  // Se tolera "ko" como error de OCR de "kg".
   const weightMatch = text.match(/(?:DEVICE\s*WEIGHT|PESO|WEIGHT|MASA)[:\.\s]*(\d[\d,\.]*)\s*(KG|KGS|KO|TON)?/i);
   if (weightMatch) {
     result.weight = weightMatch[1].replace(/[,\.]/g, '');
   }
 
-  // === FALLBACK: buscar números sueltos cerca de "kg" que no sean capacidad ===
-  // Si no se encontró capacidad ni peso, pero hay un número + kg en el texto,
-  // es probablemente el peso del equipo (más común en placas chinas).
+  // === FALLBACK: buscar números sueltos cerca de "kg" ===
   if (!result.capacity && !result.weight) {
     const kgMatch = text.match(/(\d{3,5})\s*(?:kg|ko|kgs)/i);
     if (kgMatch) {
@@ -421,9 +477,7 @@ export function parseForkliftPlateData(text) {
     }
   }
 
-  // Contar cuántos campos se encontraron
   const foundCount = Object.values(result).filter(v => v !== null).length;
-
   return { ...result, _foundCount: foundCount };
 }
 
