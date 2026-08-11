@@ -1,15 +1,23 @@
 import { useState } from 'react';
 import { useLang } from '../i18n/LanguageContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { checklistItems, ratingOptions } from '../data/checklistItems.js';
 
 export default function ChecklistForm({ onSave, onCancel, editing, forklifts }) {
   const { lang, t } = useLang();
+  const { user } = useAuth();
+
+  // El nombre del operador / de quien revisa y la fecha se fijan
+  // automáticamente con el usuario que está haciendo la revisión y con el
+  // día de hoy. Solo admin/supervisor pueden editarlos manualmente (p.ej.
+  // para capturar una revisión atrasada o corregir un dato).
+  const canEditIdentity = user?.role === 'admin' || user?.role === 'supervisor';
 
   const today = new Date();
   const [form, setForm] = useState({
     forkliftId: editing?.forkliftId || '',
-    operatorName: editing?.operatorName || '',
-    inspectorName: editing?.inspectorName || '',
+    operatorName: editing?.operatorName || user?.name || '',
+    inspectorName: editing?.inspectorName || user?.name || '',
     month: editing?.month ?? today.getMonth(),
     year: editing?.year ?? today.getFullYear(),
     day: editing?.day ?? today.getDate(),
@@ -96,41 +104,69 @@ export default function ChecklistForm({ onSave, onCancel, editing, forklifts }) 
           </div>
 
           <div className="form-field">
-            <label>{t('operatorName')} <span className="req">*</span></label>
+            <label>
+              {t('operatorName')} <span className="req">*</span>
+              {!canEditIdentity && <span className="field-lock" title={t('fixedFieldHint')}>🔒</span>}
+            </label>
             <input
               type="text"
               value={form.operatorName}
-              onChange={e => setForm(p => ({ ...p, operatorName: e.target.value }))}
-              className={errors.operatorName ? 'error' : ''}
+              onChange={e => canEditIdentity && setForm(p => ({ ...p, operatorName: e.target.value }))}
+              className={`${errors.operatorName ? 'error' : ''} ${!canEditIdentity ? 'field-readonly' : ''}`.trim()}
+              readOnly={!canEditIdentity}
+              title={!canEditIdentity ? t('fixedFieldHint') : undefined}
             />
             {errors.operatorName && <span className="error-msg">{errors.operatorName}</span>}
           </div>
 
           <div className="form-field">
-            <label>{t('inspectorName')} <span className="req">*</span></label>
+            <label>
+              {t('inspectorName')} <span className="req">*</span>
+              {!canEditIdentity && <span className="field-lock" title={t('fixedFieldHint')}>🔒</span>}
+            </label>
             <input
               type="text"
               value={form.inspectorName}
-              onChange={e => setForm(p => ({ ...p, inspectorName: e.target.value }))}
-              className={errors.inspectorName ? 'error' : ''}
+              onChange={e => canEditIdentity && setForm(p => ({ ...p, inspectorName: e.target.value }))}
+              className={`${errors.inspectorName ? 'error' : ''} ${!canEditIdentity ? 'field-readonly' : ''}`.trim()}
+              readOnly={!canEditIdentity}
+              title={!canEditIdentity ? t('fixedFieldHint') : undefined}
             />
             {errors.inspectorName && <span className="error-msg">{errors.inspectorName}</span>}
           </div>
 
           <div className="form-field">
-            <label>{t('date')}</label>
+            <label>
+              {t('date')}
+              {!canEditIdentity && <span className="field-lock" title={t('fixedFieldHint')}>🔒</span>}
+            </label>
             <div className="date-row">
-              <select value={form.day} onChange={e => setForm(p => ({ ...p, day: parseInt(e.target.value) }))}>
+              <select
+                value={form.day}
+                disabled={!canEditIdentity}
+                title={!canEditIdentity ? t('fixedFieldHint') : undefined}
+                onChange={e => setForm(p => ({ ...p, day: parseInt(e.target.value) }))}
+              >
                 {Array.from({ length: daysInMonth }, (_, i) => (
                   <option key={i} value={i + 1}>{i + 1}</option>
                 ))}
               </select>
-              <select value={form.month} onChange={e => setForm(p => ({ ...p, month: parseInt(e.target.value) }))}>
+              <select
+                value={form.month}
+                disabled={!canEditIdentity}
+                title={!canEditIdentity ? t('fixedFieldHint') : undefined}
+                onChange={e => setForm(p => ({ ...p, month: parseInt(e.target.value) }))}
+              >
                 {t('months').map((m, i) => (
                   <option key={i} value={i}>{m}</option>
                 ))}
               </select>
-              <select value={form.year} onChange={e => setForm(p => ({ ...p, year: parseInt(e.target.value) }))}>
+              <select
+                value={form.year}
+                disabled={!canEditIdentity}
+                title={!canEditIdentity ? t('fixedFieldHint') : undefined}
+                onChange={e => setForm(p => ({ ...p, year: parseInt(e.target.value) }))}
+              >
                 {Array.from({ length: 5 }, (_, i) => today.getFullYear() + i - 1).map(y => (
                   <option key={y} value={y}>{y}</option>
                 ))}

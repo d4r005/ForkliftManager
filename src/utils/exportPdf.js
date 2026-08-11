@@ -39,7 +39,31 @@ const isCJK = (ch) => {
   return (c >= 0x2e80 && c <= 0x9fff) || (c >= 0xff00 && c <= 0xffef) || (c >= 0x3000 && c <= 0x303f);
 };
 
-export async function exportChecklistToPdf(checklist) {
+// Acepta un solo checklist (compatibilidad hacia atrás, p.ej. PdfDesigner)
+// o un arreglo de checklists del MISMO montacargas/mes/año — en cuyo caso
+// dibuja TODOS los días que tengan datos en la cuadrícula de 31 columnas,
+// no solo uno. Así el PDF exportado refleja toda la información mensual
+// ya capturada para ese montacargas, no solo el registro que se clickeó.
+export async function exportChecklistToPdf(checklistOrGroup) {
+  const group = Array.isArray(checklistOrGroup) ? checklistOrGroup : [checklistOrGroup];
+  const checklist = group[0] || {};
+  // Mapa día -> checklist, para poder pintar cada columna con su propio registro
+  const byDay = {};
+  group.forEach(c => { if (c && c.day) byDay[c.day] = c; });
+  const daysWithData = Object.keys(byDay).map(Number).sort((a, b) => a - b);
+
+  // Nombres únicos (por si distintos días tuvieron distinto operador/revisor)
+  const uniqueJoin = (values) => {
+    const seen = [...new Set(values.filter(v => v && String(v).trim()))];
+    return seen.join(' / ');
+  };
+  const allOperators = uniqueJoin(group.map(c => c.operatorName));
+  const allInspectors = uniqueJoin(group.map(c => c.inspectorName));
+  const allObservations = group
+    .filter(c => c.observations && String(c.observations).trim())
+    .map(c => `D${c.day}: ${c.observations}`)
+    .join('  |  ');
+
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
 
@@ -241,7 +265,7 @@ export async function exportChecklistToPdf(checklist) {
     midX + 4, y + s4H * 0.34, col2W, s4H * 0.66, 8, true, C_BLACK, 1.15, 2
   );
   textWrapped(
-    `Nombre del operador 操作员姓名: ${checklist.operatorName || ''}`,
+    `Nombre del operador 操作员姓名: ${allOperators || checklist.operatorName || ''}`,
     TABLE_X + 5, y, PAGE_W - MARGIN - TABLE_X - 10, s4H, 7.5, true, C_BLACK, 1.15, 2
   );
 
@@ -267,7 +291,12 @@ export async function exportChecklistToPdf(checklist) {
   textRow('CONCEPTO A REVISAR 检查项目', MARGIN + 3, y, s6H, 6.5, true, C_BLACK, 'left');
   for (let d = 1; d <= 31; d++) {
     const dx = TABLE_X + (d - 1) * DAY_W;
-    if (d === checklist.day) rect(dx, y, DAY_W, s6H, C_GOLD);
+    // Si es un solo día (export clásico de un registro) se resalta en dorado.
+    // Si es un export mensual (varios registros), se resaltan todos los días
+    // que sí tienen una revisión capturada, para ubicarlos de un vistazo.
+    if (daysWithData.length <= 1 ? d === checklist.day : daysWithData.includes(d)) {
+      rect(dx, y, DAY_W, s6H, C_GOLD);
+    }
     textRow(String(d), dx + DAY_W / 2, y, s6H, 6, true, C_BLACK, 'center');
   }
   y += s6H;
@@ -280,13 +309,14 @@ export async function exportChecklistToPdf(checklist) {
     const label = `${item.id}.- ${item.es} ${item.zh}`;
     textWrapped(label, MARGIN + 3, rTop, CONCEPT_W - 6, itemH, 5.6, false, C_BLACK, 1.05, 2);
 
-    const rating = checklist.items?.[item.id];
-    if (rating) {
-      const dx = TABLE_X + (checklist.day - 1) * DAY_W;
+    daysWithData.forEach((d) => {
+      const rating = byDay[d].items?.[item.id];
+      if (!rating) return;
+      const dx = TABLE_X + (d - 1) * DAY_W;
       if (rating === 'SAT') rect(dx, rTop, DAY_W, itemH, C_GREEN);
       else if (rating === 'INS') rect(dx, rTop, DAY_W, itemH, C_RED);
       textRow(rating, dx + DAY_W / 2, rTop, itemH, 6, true, C_BLACK, 'center');
-    }
+    });
   });
 
   // --- Cuadrícula ---
@@ -302,7 +332,7 @@ export async function exportChecklistToPdf(checklist) {
 
   // --- Sección 8: Nombre de quien revisa ---
   const s8H = 14;
-  textRow(`NOMBRE DE QUIEN REVISA 检查人姓名: ${checklist.inspectorName || ''}`, MARGIN + 3, y, s8H, 7.5, true, C_BLACK, 'left');
+  textRow(`NOMBRE DE QUIEN REVISA 检查人姓名: ${allInspectors || checklist.inspectorName || ''}`, MARGIN + 3, y, s8H, 7.5, true, C_BLACK, 'left');
   hline(MARGIN, PAGE_W - MARGIN, y);
   hline(MARGIN, PAGE_W - MARGIN, y + s8H);
   vline(MARGIN, y, y + s8H);
@@ -311,7 +341,7 @@ export async function exportChecklistToPdf(checklist) {
 
   // --- Sección 9: Observaciones ---
   const s9H = 20;
-  textWrapped(`OBSERVACIONES 备注: ${checklist.observations || ''}`, MARGIN + 3, y, PAGE_W - 2 * MARGIN - 6, s9H, 7, true, C_BLACK, 1.15, 2);
+  textWrapped(`OBSERVACIONES 备注: ${allObservations || checklist.observations || ''}`, MARGIN + 3, y, PAGE_W - 2 * MARGIN - 6, s9H, 7, true, C_BLACK, 1.15, 2);
   hline(MARGIN, PAGE_W - MARGIN, y);
   hline(MARGIN, PAGE_W - MARGIN, y + s9H);
   vline(MARGIN, y, y + s9H);
@@ -320,7 +350,12 @@ export async function exportChecklistToPdf(checklist) {
   // --- Guardar ---
   const pdfBytes = await pdfDoc.save();
   const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-  const dateStr = `${checklist.year}-${String((checklist.month ?? 0) + 1).padStart(2, '0')}-${String(checklist.day).padStart(2, '0')}`;
+  const monthStr = `${checklist.year}-${String((checklist.month ?? 0) + 1).padStart(2, '0')}`;
+  // Un solo registro -> nombre con día específico (comportamiento previo).
+  // Varios registros (export mensual) -> nombre sin día, ya que cubre el mes completo.
+  const dateStr = daysWithData.length <= 1
+    ? `${monthStr}-${String(checklist.day || 1).padStart(2, '0')}`
+    : monthStr;
   const fileName = `Bitacora_${checklist.forkliftId || 'SN'}_${dateStr}.pdf`;
   await saveOrShareFile(blob, fileName, 'application/pdf');
 }

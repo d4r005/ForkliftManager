@@ -53,7 +53,14 @@ function AppContent() {
   };
 
   const handleExportPdf = (c) => {
-    exportChecklistToPdf(c);
+    // El PDF de la bitácora es mensual: si ya existen otras revisiones
+    // guardadas para el mismo montacargas/mes/año, se incluyen todas en el
+    // mismo documento (una columna por día) en vez de exportar solo el
+    // registro que se clickeó.
+    const monthGroup = store.data.checklists.filter(x =>
+      x.forkliftId === c.forkliftId && x.month === c.month && x.year === c.year
+    );
+    exportChecklistToPdf(monthGroup.length > 0 ? monthGroup : c);
   };
 
   if (authLoading) {
