@@ -241,19 +241,23 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 64px;
+  /* box-sizing es border-box globalmente, así que un height fijo + padding-bottom
+     se comen el mismo espacio (los íconos se aplastan y siguen tapados por la
+     barra del sistema). Con calc() la barra crece exactamente lo que mide el
+     inset, dejando los 64px originales intactos para los íconos. */
+  height: calc(64px + env(safe-area-inset-bottom, 0px));
   background: var(--card-bg);
   border-top: 1px solid var(--gray-border);
   display: flex;
   justify-content: space-around;
   align-items: center;
   z-index: 100;
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .platform-android .app-main,
 .platform-android .app-footer {
-  margin-bottom: 70px;
+  margin-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
   padding-bottom: 20px;
 }
 
