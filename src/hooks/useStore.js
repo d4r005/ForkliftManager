@@ -29,10 +29,9 @@ export function useStore(user) {
         checklistsQuery = checklistsQuery.eq('employee_number', user.employeeNumber);
       }
 
+      // Los montacargas son compartidos: todos los usuarios ven todos los
+      // equipos registrados para poder hacer revisiones.
       let forkliftsQuery = supabase.from('forklifts').select('*');
-      if (!isManager) {
-        forkliftsQuery = forkliftsQuery.eq('employee_number', user.employeeNumber);
-      }
 
       const [checklistsRes, forkliftsRes] = await Promise.all([
         checklistsQuery.order('created_at', { ascending: false }),
@@ -193,12 +192,9 @@ export function useStore(user) {
       if (updates.platePhotoPath !== undefined) dbUpdates.plate_photo_path = updates.platePhotoPath;
       if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
 
-      const isManager = user?.role === 'admin' || user?.role === 'supervisor';
-
+      // Los montacargas son compartidos — cualquier usuario puede
+      // actualizarlos (ej. agregar foto de placa durante revisión).
       let query = supabase.from('forklifts').update(dbUpdates).eq('id', id);
-      if (!isManager) {
-        query = query.eq('employee_number', user?.employeeNumber);
-      }
 
       const { data, error: dbError } = await query.select().single();
 
@@ -215,12 +211,11 @@ export function useStore(user) {
 
   const deleteForklift = useCallback(async (id) => {
     try {
+      // Solo admin y supervisor pueden eliminar montacargas.
       const isManager = user?.role === 'admin' || user?.role === 'supervisor';
+      if (!isManager) throw new Error('No autorizado para eliminar equipos');
 
       let query = supabase.from('forklifts').delete().eq('id', id);
-      if (!isManager) {
-        query = query.eq('employee_number', user?.employeeNumber);
-      }
 
       const { error: dbError } = await query;
       if (dbError) throw dbError;

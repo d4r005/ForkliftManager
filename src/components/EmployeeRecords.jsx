@@ -48,7 +48,16 @@ export default function EmployeeRecords() {
     try {
       const { data, error } = await supabase.rpc('list_expedientes');
       if (error) throw error;
-      if (data?.success) setEmployees(data.employees || []);
+      if (data?.success) {
+        let emps = data.employees || [];
+        // Los usuarios normales solo ven su propio expediente (para
+        // auditorías: mostrar su DC3 y diploma). Admins y supervisores
+        // ven todos.
+        if (!isAdmin) {
+          emps = emps.filter(e => e.employeeNumber === user.employeeNumber);
+        }
+        setEmployees(emps);
+      }
     } catch (err) {
       showAlert('error', err.message);
     }
@@ -281,12 +290,17 @@ export default function EmployeeRecords() {
 
   const viewPdf = async (filePath, title) => {
     try {
+      // Usar download (blob) en vez de signed URL para evitar problemas
+      // de Content-Disposition y X-Frame-Options que dejan el PDF en
+      // blanco dentro del iframe.
       const { data, error } = await supabase
         .storage
         .from('expedientes')
-        .createSignedUrl(filePath, 60);
+        .download(filePath);
       if (error) throw error;
-      setPdfViewer({ url: data.signedUrl, title, expires: Date.now() + 55000 });
+      const blob = new Blob([data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      setPdfViewer({ url, title, expires: Date.now() + 300000, isBlob: true });
     } catch (err) {
       showAlert('error', err.message);
     }
@@ -295,10 +309,13 @@ export default function EmployeeRecords() {
   useEffect(() => {
     if (!pdfViewer) return;
     const timer = setTimeout(() => {
+      if (pdfViewer.isBlob) URL.revokeObjectURL(pdfViewer.url);
       setPdfViewer(null);
       showAlert('warning', t('expLinkExpired'));
-    }, 55000);
-    return () => clearTimeout(timer);
+    }, 300000); // 5 minutos
+    return () => {
+      clearTimeout(timer);
+    };
   }, [pdfViewer]);
 
   const handleContextMenu = (e) => { e.preventDefault(); return false; };
