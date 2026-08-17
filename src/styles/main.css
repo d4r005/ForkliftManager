@@ -2124,6 +2124,56 @@ body {
   background: #fff;
 }
 
+/* ===== PDF CANVAS VIEWER (reemplaza iframe, compatible Android) ===== */
+.pdf-canvas-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #404040;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px;
+  gap: 10px;
+}
+
+.pdf-canvas-container canvas {
+  max-width: 100%;
+  height: auto;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  background: #fff;
+}
+
+.pdf-canvas-loading,
+.pdf-canvas-error {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e8eaed;
+  font-size: 1.1rem;
+  padding: 40px;
+}
+
+.pdf-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #0f0f1e;
+  border-radius: 8px;
+  color: #e8eaed;
+  font-size: 0.9rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.pdf-nav button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .pdf-viewer-watermark {
   position: fixed;
   top: 50%;

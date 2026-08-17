@@ -3,6 +3,11 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../i18n/LanguageContext.jsx';
 import { supabase } from '../lib/supabase.js';
 import { extractPdfText, parseDocumentData } from '../utils/pdfExtract.js';
+import * as pdfjsLib from 'pdfjs-dist/build/pdf.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 import ExcelImport from './ExcelImport.jsx';
 import MasterPdfImport from './MasterPdfImport.jsx';
 
@@ -290,17 +295,17 @@ export default function EmployeeRecords() {
 
   const viewPdf = async (filePath, title) => {
     try {
-      // Usar download (blob) en vez de signed URL para evitar problemas
-      // de Content-Disposition y X-Frame-Options que dejan el PDF en
-      // blanco dentro del iframe.
+      // Descargar el PDF como blob y guardarlo en estado para que el
+      // componente PdfCanvasViewer lo renderice con pdf.js (canvas).
+      // Antes se usaba un <iframe> con la blob URL, pero Android WebView
+      // no tiene visor de PDF nativo (a diferencia de Chrome desktop) y
+      // el iframe salía completamente en blanco.
       const { data, error } = await supabase
         .storage
         .from('expedientes')
         .download(filePath);
       if (error) throw error;
-      const blob = new Blob([data], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      setPdfViewer({ url, title, expires: Date.now() + 300000, isBlob: true });
+      setPdfViewer({ data, title, expires: Date.now() + 300000 });
     } catch (err) {
       showAlert('error', err.message);
     }
@@ -309,7 +314,6 @@ export default function EmployeeRecords() {
   useEffect(() => {
     if (!pdfViewer) return;
     const timer = setTimeout(() => {
-      if (pdfViewer.isBlob) URL.revokeObjectURL(pdfViewer.url);
       setPdfViewer(null);
       showAlert('warning', t('expLinkExpired'));
     }, 300000); // 5 minutos
@@ -363,7 +367,7 @@ export default function EmployeeRecords() {
     );
   }
 
-  // PDF Viewer (restricted)
+  // PDF Viewer (restricted) — renderizado con pdf.js en canvas (compatible Android)
   if (pdfViewer) {
     return (
       <div className="pdf-viewer-overlay" onContextMenu={handleContextMenu} onCopy={(e) => e.preventDefault()}>
@@ -381,7 +385,7 @@ export default function EmployeeRecords() {
         <div className="pdf-viewer-watermark">
           {user?.name} #{user?.employeeNumber} — {new Date().toLocaleString('es-MX')}
         </div>
-        <iframe src={pdfViewer.url} className="pdf-viewer-frame" title={pdfViewer.title} onContextMenu={handleContextMenu} />
+        <PdfCanvasViewer data={pdfViewer.data} />
         <div className="pdf-viewer-notice">🔒 {t('expViewerNotice')}</div>
       </div>
     );
@@ -767,6 +771,82 @@ function ExpDataRow({ label, value }) {
     <div className="exp-data-row">
       <span className="exp-data-label">{label}:</span>
       <span className="exp-data-value">{value}</span>
+    </div>
+  );
+}
+
+// Renderizador de PDF con pdf.js — dibuja cada página en un <canvas>.
+// Reemplaza el <iframe> que no funcionaba en Android WebView (sin visor
+// PDF nativo). El PDF se recibe como ArrayBuffer desde Supabase storage.
+function PdfCanvasViewer({ data }) {
+  const containerRef = useRef(null);
+  const [pdfDoc, setPdfDoc] = useState(null);
+  const [pageNum, setPageNum] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Load the PDF document
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const arrayBuffer = data instanceof ArrayBuffer ? data : await data.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        if (cancelled) return;
+        setPdfDoc(pdf);
+        setTotalPages(pdf.numPages);
+        setLoading(false);
+      } catch (err) {
+        if (!cancelled) { setError(err.message); setLoading(false); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [data]);
+
+  // Render current page
+  useEffect(() => {
+    if (!pdfDoc || !containerRef.current) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const page = await pdfDoc.getPage(pageNum);
+        if (cancelled) return;
+        const container = containerRef.current;
+        const containerWidth = container.clientWidth - 20;
+        const viewport1 = page.getViewport({ scale: 1 });
+        const scale = containerWidth / viewport1.width;
+        const viewport = page.getViewport({ scale });
+        const canvas = container.querySelector('canvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.style.width = viewport.width + 'px';
+        canvas.style.height = viewport.height + 'px';
+        await page.render({ canvasContext: ctx, viewport }).promise;
+      } catch (err) {
+        if (!cancelled) console.error('PDF render error:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [pdfDoc, pageNum]);
+
+  if (loading) return <div className="pdf-canvas-loading">Cargando PDF…</div>;
+  if (error) return <div className="pdf-canvas-error">Error: {error}</div>;
+
+  return (
+    <div className="pdf-canvas-container" ref={containerRef}>
+      {totalPages > 1 && (
+        <div className="pdf-nav">
+          <button className="btn btn-sm btn-secondary" disabled={pageNum <= 1}
+            onClick={() => setPageNum(p => Math.max(1, p - 1))}>← Anterior</button>
+          <span>Página {pageNum} de {totalPages}</span>
+          <button className="btn btn-sm btn-secondary" disabled={pageNum >= totalPages}
+            onClick={() => setPageNum(p => Math.min(totalPages, p + 1))}>Siguiente →</button>
+        </div>
+      )}
+      <canvas />
     </div>
   );
 }
