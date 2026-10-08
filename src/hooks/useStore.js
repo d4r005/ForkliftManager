@@ -5,6 +5,7 @@ import { enqueue, replay, count, removeById, isNetworkError, getQueue } from '..
 export function useStore(user) {
   const [checklists, setChecklists] = useState([]);
   const [forklifts, setForklifts] = useState([]);
+  const [maintenances, setMaintenances] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [offlinePending, setOfflinePending] = useState(0);
@@ -14,6 +15,7 @@ export function useStore(user) {
     if (!user) {
       setChecklists([]);
       setForklifts([]);
+      setMaintenances([]);
       setLoading(false);
       return;
     }
@@ -36,13 +38,16 @@ export function useStore(user) {
       // equipos registrados para poder hacer revisiones.
       let forkliftsQuery = supabase.from('forklifts').select('*');
 
-      const [checklistsRes, forkliftsRes] = await Promise.all([
+      const [checklistsRes, forkliftsRes, maintRes] = await Promise.all([
         checklistsQuery.order('created_at', { ascending: false }),
         forkliftsQuery.order('created_at', { ascending: true }),
+        supabase.from('maintenance_records').select('*').order('performed_at', { ascending: false }),
       ]);
 
       if (checklistsRes.error) throw checklistsRes.error;
       if (forkliftsRes.error) throw forkliftsRes.error;
+      // Si la migración de mantenimiento aún no corre, no rompe la app:
+      if (maintRes.error) console.warn('Mantenimientos no disponibles:', maintRes.error.message);
 
       let mapped = (checklistsRes.data || []).map(mapChecklistFromDB);
 
@@ -74,6 +79,7 @@ export function useStore(user) {
 
       setChecklists(mapped);
       setForklifts((forkliftsRes.data || []).map(mapForkliftFromDB));
+      setMaintenances((maintRes.data || []).map(mapMaintenanceFromDB));
       setOfflinePending(pendingAdds.length);
     } catch (err) {
       console.error('Error loading data:', err);
@@ -243,6 +249,39 @@ export function useStore(user) {
     }
   }, [user]);
 
+  // Registra un mantenimiento: inserta el historial y actualiza
+  // hours_last_service del equipo (el contador queda en cero).
+  const addMaintenance = useCallback(async (forkliftId, record) => {
+    if (!user) throw new Error('no_session');
+    const hours = Number(record.hoursAtService);
+    const { data, error: dbError } = await supabase
+      .from('maintenance_records')
+      .insert({
+        forklift_id: forkliftId,
+        performed_at: record.performedAt || new Date().toISOString().slice(0, 10),
+        maintenance_type: record.maintenanceType || 'preventivo',
+        hours_at_service: isNaN(hours) ? null : hours,
+        performed_by: record.performedBy || user.name || user.employeeNumber,
+        notes: record.notes || '',
+      })
+      .select()
+      .single();
+    if (dbError) throw dbError;
+    const mapped = mapMaintenanceFromDB(data);
+    setMaintenances(prev => [mapped, ...prev]);
+
+    // El equipo queda "recién servido": reinicia el contador de horas.
+    if (!isNaN(hours)) {
+      try {
+        await updateForklift(forkliftId, { currentHours: Math.max(hours, 0), hoursLastService: hours });
+      } catch (e) {
+        console.warn('No se pudo actualizar el horómetro del equipo:', e);
+      }
+    }
+    return mapped;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   const addForklift = useCallback(async (forklift) => {
     if (!user) throw new Error('no_session');
     try {
@@ -267,6 +306,9 @@ export function useStore(user) {
           photo_path: forklift.photoPath || null,
           plate_photo_path: forklift.platePhotoPath || null,
           notes: forklift.notes || '',
+          current_hours: Number(forklift.currentHours) || 0,
+          hours_last_service: Number(forklift.hoursLastService) || 0,
+          service_interval_hours: Number(forklift.serviceIntervalHours) || 200,
         })
         .select()
         .single();
@@ -302,6 +344,9 @@ export function useStore(user) {
       if (updates.photoPath !== undefined) dbUpdates.photo_path = updates.photoPath;
       if (updates.platePhotoPath !== undefined) dbUpdates.plate_photo_path = updates.platePhotoPath;
       if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+      if (updates.currentHours !== undefined) dbUpdates.current_hours = Number(updates.currentHours) || 0;
+      if (updates.hoursLastService !== undefined) dbUpdates.hours_last_service = Number(updates.hoursLastService) || 0;
+      if (updates.serviceIntervalHours !== undefined) dbUpdates.service_interval_hours = Number(updates.serviceIntervalHours) || 200;
 
       // Los montacargas son compartidos — cualquier usuario puede
       // actualizarlos (ej. agregar foto de placa durante revisión).
@@ -348,6 +393,8 @@ export function useStore(user) {
     deleteChecklist,
     addForklift,
     updateForklift,
+    addMaintenance,
+    maintenances,
     deleteForklift,
     offline: { pending: offlinePending, info: offlineInfo, syncNow: syncOffline },
   };
@@ -371,6 +418,19 @@ function mapChecklistFromDB(row) {
   };
 }
 
+function mapMaintenanceFromDB(row) {
+  return {
+    id: row.id,
+    forkliftId: row.forklift_id,
+    performedAt: row.performed_at,
+    maintenanceType: row.maintenance_type || 'preventivo',
+    hoursAtService: row.hours_at_service,
+    performedBy: row.performed_by || '',
+    notes: row.notes || '',
+    createdAt: row.created_at,
+  };
+}
+
 function mapForkliftFromDB(row) {
   return {
     id: row.id,
@@ -391,6 +451,9 @@ function mapForkliftFromDB(row) {
     photoPath: row.photo_path || null,
     platePhotoPath: row.plate_photo_path || null,
     notes: row.notes || '',
+    currentHours: row.current_hours ?? 0,
+    hoursLastService: row.hours_last_service ?? 0,
+    serviceIntervalHours: row.service_interval_hours ?? 200,
     createdAt: row.created_at,
   };
 }

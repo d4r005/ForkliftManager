@@ -172,6 +172,8 @@ function AppContent() {
             onAdd={store.addForklift}
             onUpdate={store.updateForklift}
             onDelete={store.deleteForklift}
+            maintenances={store.maintenances}
+            onAddMaintenance={store.addMaintenance}
           />
         )}
 

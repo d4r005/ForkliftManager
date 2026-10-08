@@ -3128,3 +3128,58 @@ body {
    Módulo 6: QR
    ===================================================== */
 .qr-hint { font-size: 0.75rem; opacity: 0.65; margin: 0; }
+
+/* =====================================================
+   Mantenimiento por horas (horómetro)
+   ===================================================== */
+.maint-chip {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  width: fit-content;
+}
+.maint-chip.maint-ok {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.maint-chip.maint-soon {
+  background: rgba(234, 179, 8, 0.15);
+  color: #eab308;
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+.maint-chip.maint-due {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  animation: maint-pulse 2s infinite;
+}
+
+@keyframes maint-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.25); }
+  50% { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.08); }
+}
+
+.maint-history {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.maint-history-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  background: rgba(120, 130, 150, 0.08);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.maint-history-notes { opacity: 0.75; }

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
 import { extractPlateDataWithAI, extractTextFromImage, parseForkliftPlateData } from '../utils/ocrExtract.js';
 
-export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }) {
+export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete, maintenances = [], onAddMaintenance }) {
   const { t } = useLang();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'supervisor';
@@ -19,6 +19,7 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
     capacity: '', capacityUnit: 'kg', powerType: '', mastType: '',
     maxLiftHeight: '', tireType: '', manufactureYear: '', voltage: '',
     weight: '', notes: '', photoPath: null, platePhotoPath: null,
+    currentHours: '', hoursLastService: '', serviceIntervalHours: '200',
   });
 
   const [uploading, setUploading] = useState(false);
@@ -27,6 +28,23 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
   const [extractedData, setExtractedData] = useState(null);
   const [qrForklift, setQrForklift] = useState(null);   // equipo del modal QR
   const [qrImage, setQrImage] = useState(null);
+  const [hoursForklift, setHoursForklift] = useState(null); // modal actualizar horómetro
+  const [hoursValue, setHoursValue] = useState('');
+  const [maintForklift, setMaintForklift] = useState(null); // modal registrar mantenimiento
+  const [maintForm, setMaintForm] = useState({ performedAt: '', maintenanceType: 'preventivo', hoursAtService: '', notes: '' });
+  const [maintSaving, setMaintSaving] = useState(false);
+
+  // Semáforo de mantenimiento: none (sin datos) / ok / soon (>=90%) / due
+  const maintState = (f) => {
+    const cur = Number(f.currentHours) || 0;
+    const last = Number(f.hoursLastService) || 0;
+    const interval = Number(f.serviceIntervalHours) || 200;
+    if (!f.currentHours && !f.hoursLastService) return { state: 'none', hoursSince: 0, interval };
+    const hoursSince = Math.max(cur - last, 0);
+    if (hoursSince >= interval) return { state: 'due', hoursSince, interval };
+    if (hoursSince >= interval * 0.9) return { state: 'soon', hoursSince, interval };
+    return { state: 'ok', hoursSince, interval };
+  };
   const photoInputRef = useRef(null);
   const plateInputRef = useRef(null);
   const fileTarget = useRef(null);
@@ -42,6 +60,7 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
       capacity: '', capacityUnit: 'kg', powerType: '', mastType: '',
       maxLiftHeight: '', tireType: '', manufactureYear: '', voltage: '',
       weight: '', notes: '', photoPath: null, platePhotoPath: null,
+      currentHours: '', hoursLastService: '', serviceIntervalHours: '200',
     });
     setExtractedData(null);
     setEditingId(null);
@@ -71,6 +90,9 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
       notes: forklift.notes || '',
       photoPath: forklift.photoPath || null,
       platePhotoPath: forklift.platePhotoPath || null,
+      currentHours: forklift.currentHours ?? '',
+      hoursLastService: forklift.hoursLastService ?? '',
+      serviceIntervalHours: forklift.serviceIntervalHours ?? '200',
     });
     setEditingId(forklift.id);
     setExtractedData(null);
@@ -242,6 +264,9 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
           notes: formData.notes.trim(),
           photoPath: formData.photoPath,
           platePhotoPath: formData.platePhotoPath,
+          currentHours: formData.currentHours === '' ? 0 : Number(formData.currentHours),
+          hoursLastService: formData.hoursLastService === '' ? 0 : Number(formData.hoursLastService),
+          serviceIntervalHours: formData.serviceIntervalHours === '' ? 200 : Number(formData.serviceIntervalHours),
         });
         showAlert('success', t('fkUpdated'));
       } else {
@@ -263,6 +288,9 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
           notes: formData.notes.trim(),
           photoPath: formData.photoPath,
           platePhotoPath: formData.platePhotoPath,
+          currentHours: formData.currentHours === '' ? 0 : Number(formData.currentHours),
+          hoursLastService: formData.hoursLastService === '' ? 0 : Number(formData.hoursLastService),
+          serviceIntervalHours: formData.serviceIntervalHours === '' ? 200 : Number(formData.serviceIntervalHours),
         });
         showAlert('success', t('fkSaved'));
       }
@@ -496,6 +524,28 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
                   onChange={e => updateField('weight', e.target.value)}
                   placeholder="3500" />
               </div>
+              <div className="form-field">
+                <label>{t('fkCurrentHours')}</label>
+                <input type="number" min="0" step="0.1" value={formData.currentHours}
+                  onChange={e => updateField('currentHours', e.target.value)}
+                  placeholder="1234.5" />
+              </div>
+              <div className="form-field">
+                <label>{t('fkLastServiceHours')}</label>
+                <input type="number" min="0" step="0.1" value={formData.hoursLastService}
+                  onChange={e => updateField('hoursLastService', e.target.value)}
+                  placeholder="1000" />
+              </div>
+              <div className="form-field">
+                <label>{t('fkServiceInterval')}</label>
+                <select value={formData.serviceIntervalHours}
+                  onChange={e => updateField('serviceIntervalHours', e.target.value)}>
+                  <option value="100">100 h</option>
+                  <option value="200">200 h</option>
+                  <option value="250">250 h</option>
+                  <option value="500">500 h</option>
+                </select>
+              </div>
             </div>
             <div className="form-field" style={{ marginTop: 12 }}>
               <label>{t('fkNotes')}</label>
@@ -554,6 +604,16 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
               <DetailRow label={t('fkYear')} value={f.manufactureYear} />
               <DetailRow label={t('fkVoltage')} value={f.voltage ? `${f.voltage} V` : null} />
               <DetailRow label={t('fkWeight')} value={f.weight ? `${f.weight} kg` : null} />
+              {(() => {
+                const ms = maintState(f);
+                if (ms.state === 'none') return null;
+                const txt = ms.state === 'due' ? t('maintDue') : ms.state === 'soon' ? t('maintSoon') : t('maintOk');
+                return (
+                  <div className={`maint-chip maint-${ms.state}`}>
+                    🔧 {t('maintHoursSince')}: {ms.hoursSince} / {ms.interval} h — {txt}
+                  </div>
+                );
+              })()}
               {f.notes && <div className="fk-detail-notes"><label>{t('fkNotes')}</label><p>{f.notes}</p></div>}
             </div>
           </div>
@@ -561,6 +621,50 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
       </div>
     );
   }
+
+  // === Mantenimiento por horas ===
+  const openHours = (f) => {
+    setHoursForklift(f);
+    setHoursValue(f.currentHours ?? '');
+  };
+
+  const saveHours = async () => {
+    if (!hoursForklift) return;
+    const val = hoursValue === '' ? 0 : Number(hoursValue);
+    if (isNaN(val) || val < 0) { showAlert('error', t('maintInvalidHours')); return; }
+    try {
+      await onUpdate(hoursForklift.id, { currentHours: val });
+      showAlert('success', t('maintHoursUpdated'));
+      setHoursForklift(null);
+    } catch (err) {
+      showAlert('error', err.message);
+    }
+  };
+
+  const openMaint = (f) => {
+    setMaintForklift(f);
+    setMaintForm({
+      performedAt: new Date().toISOString().slice(0, 10),
+      maintenanceType: 'preventivo',
+      hoursAtService: f.currentHours ?? '',
+      notes: '',
+    });
+  };
+
+  const saveMaint = async () => {
+    if (!maintForklift) return;
+    if (!onAddMaintenance) { showAlert('error', 'no_op'); return; }
+    setMaintSaving(true);
+    try {
+      await onAddMaintenance(maintForklift.id, maintForm);
+      showAlert('success', t('maintRegistered'));
+      setMaintForklift(null);
+    } catch (err) {
+      showAlert('error', err.message);
+    } finally {
+      setMaintSaving(false);
+    }
+  };
 
   // === QR por equipo ===
   const openQr = async (f) => {
@@ -614,6 +718,19 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
     <div className="forklift-manager">
       {alert && <div className={`alert alert-${alert.type}`}>{alert.type === 'success' ? '✅ ' : '⚠️ '}{alert.msg}</div>}
 
+      {(() => {
+        const states = forklifts.map(maintState);
+        const due = states.filter(x => x.state === 'due').length;
+        const soon = states.filter(x => x.state === 'soon').length;
+        if (!forklifts.length || (due === 0 && soon === 0)) return null;
+        return (
+          <div className="vigencia-summary">
+            <span className="vigencia-badge expired">🛠️ {t('maintDueCount').replace('{n}', due)}</span>
+            <span className="vigencia-badge warning">⏳ {t('maintSoonCount').replace('{n}', soon)}</span>
+          </div>
+        );
+      })()}
+
       <div className="section-header">
         <h2>🚜 {t('forklifts')}</h2>
         <div className="section-header-actions">
@@ -643,14 +760,118 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
                 {f.capacity && <div className="fk-card-cap">⚖️ {f.capacity} {f.capacityUnit || 'kg'}</div>}
                 {f.powerType && <div className="fk-card-power">⛽ {f.powerType}</div>}
                 {f.serialNumber && <div className="fk-card-serial">🔢 {f.serialNumber}</div>}
+                {(() => {
+                  const ms = maintState(f);
+                  if (ms.state === 'none') return null;
+                  const txt = ms.state === 'due' ? t('maintDue') : ms.state === 'soon' ? t('maintSoon') : t('maintOk');
+                  return (
+                    <div className={`maint-chip maint-${ms.state}`} title={txt}>
+                      🔧 {ms.hoursSince}/{ms.interval} h{ms.state === 'due' ? ' ⛔' : ms.state === 'soon' ? ' ⏳' : ''}
+                    </div>
+                  );
+                })()}
               </div>
               <div className="fk-card-actions">
+                <button className="icon-btn" onClick={(e) => { e.stopPropagation(); openHours(f); }} title={t('maintUpdateHours')}>⏱️</button>
+                {isAdmin && <button className="icon-btn" onClick={(e) => { e.stopPropagation(); openMaint(f); }} title={t('maintTitle')}>🛠️</button>}
                 <button className="icon-btn" onClick={(e) => { e.stopPropagation(); openQr(f); }} title={t('qrTitle')}>🔳</button>
                 {isAdmin && <button className="icon-btn" onClick={(e) => { e.stopPropagation(); handleEdit(f); }} title={t('fkEdit')}>✏️</button>}
                 {isAdmin && <button className="icon-btn danger" onClick={(e) => { e.stopPropagation(); if (confirm(t('confirmDeleteForklift'))) onDelete(f.id); }} title={t('deleteForklift')}>🗑️</button>}
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Modal actualizar horómetro */}
+      {hoursForklift && (
+        <div className="correction-overlay" onClick={() => setHoursForklift(null)}>
+          <div className="correction-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="correction-header">
+              <h3>⏱️ {t('maintUpdateHours')} — {hoursForklift.idCode}</h3>
+              <button className="icon-btn" onClick={() => setHoursForklift(null)}>✕</button>
+            </div>
+            <div className="correction-body">
+              <div className="form-field">
+                <label>{t('fkCurrentHours')}</label>
+                <input
+                  type="number" min="0" step="0.1" autoFocus
+                  value={hoursValue}
+                  onChange={e => setHoursValue(e.target.value)}
+                  placeholder="1234.5"
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: 8 }}>
+                <button className="btn btn-secondary" onClick={() => setHoursForklift(null)}>{t('cancel')}</button>
+                <button className="btn btn-primary" onClick={saveHours}>💾 {t('save')}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal registrar mantenimiento (admin/supervisor) */}
+      {maintForklift && (
+        <div className="correction-overlay" onClick={() => setMaintForklift(null)}>
+          <div className="correction-modal" style={{ minWidth: 'min(92vw, 480px)' }} onClick={(e) => e.stopPropagation()}>
+            <div className="correction-header">
+              <h3>🛠️ {t('maintTitle')} — {maintForklift.idCode}</h3>
+              <button className="icon-btn" onClick={() => setMaintForklift(null)}>✕</button>
+            </div>
+            <div className="correction-body">
+              <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div className="form-field">
+                  <label>{t('maintDate')}</label>
+                  <input type="date" value={maintForm.performedAt}
+                    onChange={e => setMaintForm(p => ({ ...p, performedAt: e.target.value }))} />
+                </div>
+                <div className="form-field">
+                  <label>{t('maintType')}</label>
+                  <select value={maintForm.maintenanceType}
+                    onChange={e => setMaintForm(p => ({ ...p, maintenanceType: e.target.value }))}>
+                    <option value="preventivo">{t('maintTypePreventive')}</option>
+                    <option value="correctivo">{t('maintTypeCorrective')}</option>
+                    <option value="otro">{t('maintTypeOther')}</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-field">
+                <label>{t('maintHours')}</label>
+                <input type="number" min="0" step="0.1" value={maintForm.hoursAtService}
+                  onChange={e => setMaintForm(p => ({ ...p, hoursAtService: e.target.value }))} />
+              </div>
+              <div className="form-field">
+                <label>{t('maintNotes')}</label>
+                <textarea rows={2} value={maintForm.notes}
+                  onChange={e => setMaintForm(p => ({ ...p, notes: e.target.value }))} />
+              </div>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => setMaintForklift(null)}>{t('cancel')}</button>
+                <button className="btn btn-primary" onClick={saveMaint} disabled={maintSaving}>
+                  {maintSaving ? '⏳ …' : `💾 ${t('maintSave')}`}
+                </button>
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <strong>{t('maintHistory')}</strong>
+                <div className="maint-history">
+                  {maintenances.filter(m => m.forkliftId === maintForklift.id).length === 0 ? (
+                    <p className="reports-no-data">{t('maintEmpty')}</p>
+                  ) : (
+                    maintenances.filter(m => m.forkliftId === maintForklift.id).map(m => (
+                      <div key={m.id} className="maint-history-row">
+                        <span>📅 {m.performedAt}</span>
+                        <span>🔧 {m.maintenanceType}</span>
+                        {m.hoursAtService != null && <span>⏱️ {m.hoursAtService} h</span>}
+                        <span>👤 {m.performedBy || '—'}</span>
+                        {m.notes && <span className="maint-history-notes">📝 {m.notes}</span>}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
