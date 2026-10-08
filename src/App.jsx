@@ -149,6 +149,8 @@ function AppContent() {
         {view === 'dashboard' && (
           <Dashboard
             checklists={store.data.checklists}
+            forklifts={store.data.forklifts}
+            isManager={canManageContent}
             onNew={handleNew}
             onViewList={() => setView('list')}
           />
