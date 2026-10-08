@@ -56,6 +56,11 @@ export default function ChecklistForm({ onSave, onCancel, editing, forklifts, in
     if (!form.forkliftId) errs.forkliftId = t('required');
     if (!form.operatorName) errs.operatorName = t('required');
     if (!form.inspectorName) errs.inspectorName = t('required');
+    const selFkForValidation = (forklifts || []).find(f => f.idCode === form.forkliftId);
+    if (selFkForValidation) {
+      const hm = Number(form.hourmeter);
+      if (form.hourmeter === '' || isNaN(hm) || hm < 0) errs.hourmeter = t('chkHourmeterRequired');
+    }
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
@@ -112,13 +117,15 @@ export default function ChecklistForm({ onSave, onCancel, editing, forklifts, in
             if (!selFk) return null; // solo equipos registrados
             return (
               <div className="form-field">
-                <label>{t('chkHourmeter')}</label>
+                <label>{t('chkHourmeter')} <span className="req">*</span></label>
                 <input
                   type="number" min="0" step="0.1"
                   value={form.hourmeter}
                   onChange={e => setForm(p => ({ ...p, hourmeter: e.target.value }))}
+                  className={errors.hourmeter ? 'error' : ''}
                   placeholder={selFk.currentHours ? t('chkHourmeterCurrent').replace('{h}', selFk.currentHours) : '1234.5'}
                 />
+                {errors.hourmeter && <span className="error-msg">{errors.hourmeter}</span>}
               </div>
             );
           })()}

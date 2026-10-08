@@ -2,8 +2,9 @@
 
 export const translations = {
   es: {
-    chkHourmeter: 'Horómetro (h) — opcional',
+    chkHourmeter: 'Horómetro (h)',
     chkHourmeterCurrent: 'Última lectura: {h} h',
+    chkHourmeterRequired: 'Captura la lectura del horómetro',
     save: 'Guardar',
 
     // === Mantenimiento por horas ===
@@ -356,8 +357,9 @@ authEmployeeNumber: 'Número de empleado',
     fkCardTitle: 'Equipo',
   },
   en: {
-    chkHourmeter: 'Hourmeter (h) — optional',
+    chkHourmeter: 'Hourmeter (h)',
     chkHourmeterCurrent: 'Last reading: {h} h',
+    chkHourmeterRequired: 'Enter the hourmeter reading',
     save: 'Save',
 
     // === Maintenance by hours ===
@@ -707,8 +709,9 @@ authEmployeeNumber: 'Employee number',
     fkCardTitle: 'Equipment',
   },
   zh: {
-    chkHourmeter: '小时表 (h) — 可选',
+    chkHourmeter: '小时表 (h)',
     chkHourmeterCurrent: '上次读数: {h} h',
+    chkHourmeterRequired: '请输入小时表读数',
     save: '保存',
 
     // === 按小时保养 ===
@@ -1047,8 +1050,9 @@ authEmployeeNumber: '员工编号',
     fkCardTitle: '设备',
   },
   vi: {
-    chkHourmeter: 'Đồng hồ giờ (h) — tùy chọn',
+    chkHourmeter: 'Đồng hồ giờ (h)',
     chkHourmeterCurrent: 'Số đọc gần nhất: {h} h',
+    chkHourmeterRequired: 'Nhập số đọc đồng hồ giờ',
     save: 'Lưu',
 
     // === Bảo trì theo giờ ===
