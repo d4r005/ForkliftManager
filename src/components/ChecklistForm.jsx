@@ -26,6 +26,7 @@ export default function ChecklistForm({ onSave, onCancel, editing, forklifts, in
     observations: editing?.observations || '',
     operatorSignature: editing?.operatorSignature || null,
     inspectorSignature: editing?.inspectorSignature || null,
+    hourmeter: '',
   });
 
   const [errors, setErrors] = useState({});
@@ -105,6 +106,22 @@ export default function ChecklistForm({ onSave, onCancel, editing, forklifts, in
             )}
             {errors.forkliftId && <span className="error-msg">{errors.forkliftId}</span>}
           </div>
+
+          {(() => {
+            const selFk = (forklifts || []).find(f => f.idCode === form.forkliftId);
+            if (!selFk) return null; // solo equipos registrados
+            return (
+              <div className="form-field">
+                <label>{t('chkHourmeter')}</label>
+                <input
+                  type="number" min="0" step="0.1"
+                  value={form.hourmeter}
+                  onChange={e => setForm(p => ({ ...p, hourmeter: e.target.value }))}
+                  placeholder={selFk.currentHours ? t('chkHourmeterCurrent').replace('{h}', selFk.currentHours) : '1234.5'}
+                />
+              </div>
+            );
+          })()}
 
           <div className="form-field">
             <label>

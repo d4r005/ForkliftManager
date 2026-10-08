@@ -46,6 +46,15 @@ function AppContent() {
       } else {
         await store.addChecklist(checklist);
       }
+      // Si capturaron el horómetro en la revisión, actualiza el equipo.
+      const hm = Number(checklist.hourmeter);
+      if (checklist.hourmeter !== '' && checklist.hourmeter !== undefined && !isNaN(hm) && hm >= 0) {
+        const fk = store.data.forklifts.find(f => f.idCode === checklist.forkliftId);
+        if (fk) {
+          try { await store.updateForklift(fk.id, { currentHours: hm }); }
+          catch (e) { console.warn('No se pudo actualizar el horómetro:', e); }
+        }
+      }
       setQrForklift(null);
       setView('list');
     } catch (err) {
