@@ -2901,3 +2901,230 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* =====================================================
+   Módulo 1: correcciones de insatisfactorios
+   ===================================================== */
+.correction-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.correction-modal {
+  background: var(--card-bg, #1c1c2a);
+  color: var(--text-primary, #e8e8e8);
+  border-radius: 12px;
+  width: min(92vw, 420px);
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  padding: 16px;
+}
+
+.correction-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.correction-header h3 { margin: 0; font-size: 1.05rem; }
+
+.correction-item-info {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+
+.correction-body p { margin: 6px 0; font-size: 0.9rem; }
+
+.correction-verified { color: #22c55e; }
+.correction-pending-verify { color: #eab308; }
+
+.correction-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.correction-chip.verified { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.correction-chip.corrected { background: rgba(234, 179, 8, 0.15); color: #eab308; }
+.correction-chip.pending { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+.ei-correction {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+}
+.correction-btn { font-size: 0.8rem; padding: 2px 6px; }
+
+/* =====================================================
+   Módulo 2: vencimientos (semáforo)
+   ===================================================== */
+.vigencia-badge.warning {
+  background: rgba(234, 179, 8, 0.15);
+  color: #eab308;
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.vigencia-summary {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  background: rgba(120, 130, 150, 0.08);
+  border-radius: 10px;
+}
+
+/* =====================================================
+   Módulo 3: reportes
+   ===================================================== */
+.reports-view { max-width: 1100px; margin: 0 auto; }
+
+.reports-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.reports-section { padding: 16px; }
+
+.reports-bars { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+
+.reports-bar-row {
+  display: grid;
+  grid-template-columns: 70px 1fr 30px;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.78rem;
+}
+
+.reports-bar-label {
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+.reports-bar-label-wide { grid-column: span 1; }
+
+.reports-bar-track {
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(120, 130, 150, 0.15);
+  overflow: hidden;
+}
+
+.reports-bar-fill { height: 100%; border-radius: 6px; }
+.reports-bar-fill.danger { background: #ef4444; }
+.reports-bar-fill.warning { background: #eab308; }
+
+.reports-bar-value { font-weight: 600; font-size: 0.75rem; }
+
+.reports-no-data { opacity: 0.6; font-size: 0.85rem; }
+
+.reports-trend-svg { width: 100%; max-height: 200px; color: var(--text-primary, #e8e8e8); }
+
+.reports-legend { display: flex; gap: 16px; font-size: 0.8rem; opacity: 0.8; margin-top: 6px; }
+
+/* =====================================================
+   Módulo 4: bitácora de auditoría
+   ===================================================== */
+.audit-log { max-width: 1000px; margin: 0 auto; }
+
+.audit-list { display: flex; flex-direction: column; gap: 6px; }
+
+.audit-entry {
+  background: var(--card-bg, #1c1c2a);
+  border: 1px solid rgba(120, 130, 150, 0.2);
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.audit-entry:hover { border-color: rgba(120, 130, 150, 0.45); }
+
+.audit-entry-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+}
+
+.audit-action {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.72rem;
+}
+.audit-action.audit-insert { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.audit-action.audit-update { background: rgba(234, 179, 8, 0.15); color: #eab308; }
+.audit-action.audit-delete { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+.audit-table { font-weight: 600; }
+.audit-record { opacity: 0.6; font-family: monospace; }
+.audit-user { font-weight: 600; }
+.audit-date { margin-left: auto; opacity: 0.65; font-size: 0.75rem; }
+
+.audit-details {
+  margin: 10px 0 0;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  font-size: 0.7rem;
+  overflow-x: auto;
+  max-height: 260px;
+  white-space: pre-wrap;
+}
+
+/* =====================================================
+   Módulo 7: firmas
+   ===================================================== */
+.signature-section { margin-top: 8px; }
+
+.signature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.signature-pad-label { font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; }
+
+.signature-pad-actions { margin-top: 6px; display: flex; justify-content: flex-end; }
+
+.signature-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.signature-rebtn { position: absolute; bottom: 6px; right: 6px; }
+
+.signature-status { color: #22c55e; margin-left: 6px; }
+
+/* =====================================================
+   Módulo 6: QR
+   ===================================================== */
+.qr-hint { font-size: 0.75rem; opacity: 0.65; margin: 0; }

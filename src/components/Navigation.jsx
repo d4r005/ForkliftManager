@@ -1,7 +1,7 @@
 import { useLang } from '../i18n/LanguageContext.jsx';
 import { Capacitor } from '@capacitor/core';
 
-export default function Navigation({ view, setView, checklistCount, isAdmin }) {
+export default function Navigation({ view, setView, checklistCount, isAdmin, isAdminUser }) {
   const { t } = useLang();
   const platform = Capacitor.getPlatform();
   const isAndroid = platform === 'android';
@@ -25,7 +25,11 @@ export default function Navigation({ view, setView, checklistCount, isAdmin }) {
   ];
 
   if (isAdmin) {
+    navItems.push({ id: 'reports', label: isAndroid ? t('navReports') : t('reportsTitle'), icon: '📈' });
     navItems.push({ id: 'users', label: isAndroid ? t('navUsers') : t('userManagement'), icon: '👥' });
+  }
+  if (isAdminUser) {
+    navItems.push({ id: 'auditoria', label: isAndroid ? t('navAudit') : t('auditTitle'), icon: '🗂️' });
   }
 
   if (isAndroid) {

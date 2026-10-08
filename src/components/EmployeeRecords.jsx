@@ -338,6 +338,33 @@ export default function EmployeeRecords() {
     return d >= today;
   };
 
+  // Semáforo de vencimiento: expired / warning (≤30 días) / ok / none
+  const getVigenciaState = (dateStr) => {
+    if (!dateStr) return 'none';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return 'none';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const daysLeft = Math.ceil((d - today) / 86400000);
+    if (daysLeft < 0) return 'expired';
+    if (daysLeft <= 30) return 'warning';
+    return 'ok';
+  };
+
+  const vigenciaText = (dateStr) => {
+    const state = getVigenciaState(dateStr);
+    if (state === 'none') return t('expIncomplete');
+    if (state === 'expired') return t('vigenciaExpired');
+    if (state === 'warning') {
+      const d = new Date(dateStr);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const daysLeft = Math.ceil((d - today) / 86400000);
+      return t('vigenciaExpiring').replace('{n}', daysLeft);
+    }
+    return t('vigenciaValid');
+  };
+
   if (loading) {
     return (
       <div className="loading-screen">
@@ -589,16 +616,16 @@ export default function EmployeeRecords() {
               <div className="exp-data-row">
                 <span className="exp-data-label">{t('expDc3Vigencia')}:</span>
                 <span className="exp-data-value">
-                  <span className={`vigencia-badge ${isVigenciaValid(selectedEmp.dc3Vigencia) === true ? 'valid' : isVigenciaValid(selectedEmp.dc3Vigencia) === false ? 'expired' : 'none'}`}>
-                    {formatDate(selectedEmp.dc3Vigencia)}
+                  <span className={`vigencia-badge ${getVigenciaState(selectedEmp.dc3Vigencia)}`} title={vigenciaText(selectedEmp.dc3Vigencia)}>
+                    {formatDate(selectedEmp.dc3Vigencia)} · {vigenciaText(selectedEmp.dc3Vigencia)}
                   </span>
                 </span>
               </div>
               <div className="exp-data-row">
                 <span className="exp-data-label">{t('expDiplomaVigencia')}:</span>
                 <span className="exp-data-value">
-                  <span className={`vigencia-badge ${isVigenciaValid(selectedEmp.diplomaVigencia) === true ? 'valid' : isVigenciaValid(selectedEmp.diplomaVigencia) === false ? 'expired' : 'none'}`}>
-                    {formatDate(selectedEmp.diplomaVigencia)}
+                  <span className={`vigencia-badge ${getVigenciaState(selectedEmp.diplomaVigencia)}`} title={vigenciaText(selectedEmp.diplomaVigencia)}>
+                    {formatDate(selectedEmp.diplomaVigencia)} · {vigenciaText(selectedEmp.diplomaVigencia)}
                   </span>
                 </span>
               </div>
@@ -672,6 +699,29 @@ export default function EmployeeRecords() {
 
         <div className="expediente-warning">🔒 {t('expSecurityNotice')}</div>
 
+        {employees.length > 0 && (
+          <div className="vigencia-summary">
+            {(() => {
+              let expired = 0, expiring = 0, ok = 0;
+              employees.forEach(emp => {
+                [emp.dc3Vigencia, emp.diplomaVigencia].forEach(d => {
+                  const st = getVigenciaState(d);
+                  if (st === 'expired') expired++;
+                  else if (st === 'warning') expiring++;
+                  else if (st === 'ok') ok++;
+                });
+              });
+              return (
+                <>
+                  <span className="vigencia-badge expired">⛔ {t('vigenciaExpiredCount').replace('{n}', expired)}</span>
+                  <span className="vigencia-badge warning">⏳ {t('vigenciaExpiringCount').replace('{n}', expiring)}</span>
+                  <span className="vigencia-badge valid">✅ {t('vigenciaValidCount').replace('{n}', ok)}</span>
+                </>
+              );
+            })()}
+          </div>
+        )}
+
         {employees.length === 0 ? (
           <div className="empty-mini"><p>{t('expNoRecords')}</p></div>
         ) : (
@@ -692,8 +742,8 @@ export default function EmployeeRecords() {
         {employees.length > 0 && (
           <div className="expediente-cards">
             {employees.map(emp => {
-              const dc3Valid = isVigenciaValid(emp.dc3Vigencia);
-              const diplomaValid = isVigenciaValid(emp.diplomaVigencia);
+              const dc3State = getVigenciaState(emp.dc3Vigencia);
+              const diplomaState = getVigenciaState(emp.diplomaVigencia);
               const isSelected = selectedIds.includes(emp.employeeNumber);
 
               return (
@@ -712,17 +762,17 @@ export default function EmployeeRecords() {
                       <span className="badge">#{emp.employeeNumber}</span>
                     </div>
                     <div className="exp-card-meta">
-                      {dc3Valid !== null && (
-                        <span className={`vigencia-badge ${dc3Valid ? 'valid' : 'expired'}`}>
-                          DC3: {formatDate(emp.dc3Vigencia)}
+                      {dc3State !== 'none' && (
+                        <span className={`vigencia-badge ${dc3State}`} title={vigenciaText(emp.dc3Vigencia)}>
+                          DC3: {formatDate(emp.dc3Vigencia)}{dc3State === 'expired' ? ' ⛔' : dc3State === 'warning' ? ' ⏳' : ''}
                         </span>
                       )}
-                      {diplomaValid !== null && (
-                        <span className={`vigencia-badge ${diplomaValid ? 'valid' : 'expired'}`}>
-                          🎓: {formatDate(emp.diplomaVigencia)}
+                      {diplomaState !== 'none' && (
+                        <span className={`vigencia-badge ${diplomaState}`} title={vigenciaText(emp.diplomaVigencia)}>
+                          🎓: {formatDate(emp.diplomaVigencia)}{diplomaState === 'expired' ? ' ⛔' : diplomaState === 'warning' ? ' ⏳' : ''}
                         </span>
                       )}
-                      {dc3Valid === null && diplomaValid === null && (
+                      {dc3State === 'none' && diplomaState === 'none' && (
                         <span className="vigencia-badge none">{t('expIncomplete')}</span>
                       )}
                     </div>

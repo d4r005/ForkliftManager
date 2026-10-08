@@ -346,6 +346,44 @@ export async function exportChecklistToPdf(checklistOrGroup) {
   hline(MARGIN, PAGE_W - MARGIN, y + s9H);
   vline(MARGIN, y, y + s9H);
   vline(PAGE_W - MARGIN, y, y + s9H);
+  y += s9H + 2;
+
+  // --- Sección 10: Firmas manuscritas (si el registro las trae) ---
+  // En export mensual se toma la primera firma disponible del grupo.
+  const signSrc = group.find(c => c?.operatorSignature || c?.inspectorSignature) || {};
+  const opSig = signSrc.operatorSignature || null;
+  const insSig = signSrc.inspectorSignature || null;
+  const dataUrlToBytes = async (dataUrl) => {
+    const res = await fetch(dataUrl);
+    return new Uint8Array(await res.arrayBuffer());
+  };
+  const signatures = [];
+  try {
+    if (opSig) signatures.push({ label: 'FIRMA DEL OPERADOR 操作员签名', data: await pdfDoc.embedPng(await dataUrlToBytes(opSig)) });
+    if (insSig) signatures.push({ label: 'FIRMA DE QUIEN REVISA 检查人签名', data: await pdfDoc.embedPng(await dataUrlToBytes(insSig)) });
+  } catch (e) {
+    console.warn('Firma no se pudo incrustar:', e);
+    signatures.length = 0;
+  }
+  if (signatures.length > 0) {
+    const s10H = 24;
+    const halfW = (PAGE_W - 2 * MARGIN) / signatures.length;
+    signatures.forEach((sig, i) => {
+      const x0 = MARGIN + i * halfW;
+      // Escala la firma para que quepa en el recuadro conservando proporción.
+      const maxH = 15, maxW = halfW - 60;
+      const scale = Math.min(maxH / sig.data.height, maxW / sig.data.width, 1);
+      const w = sig.data.width * scale, h = sig.data.height * scale;
+      textRow(sig.label, x0 + 3, y, 8, 6, true, C_BLACK, 'left');
+      imgTop(sig.data, x0 + halfW - w - 6, y + s10H - h - 2, w, h);
+    });
+    hline(MARGIN, PAGE_W - MARGIN, y);
+    hline(MARGIN, PAGE_W - MARGIN, y + s10H);
+    vline(MARGIN, y, y + s10H);
+    vline(PAGE_W - MARGIN, y, y + s10H);
+    if (signatures.length > 1) vline(MARGIN + halfW, y, y + s10H);
+    y += s10H + 2;
+  }
 
   // --- Guardar ---
   const pdfBytes = await pdfDoc.save();

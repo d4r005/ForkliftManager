@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useLang } from '../i18n/LanguageContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { checklistItems, ratingOptions } from '../data/checklistItems.js';
+import SignaturePad from './SignaturePad.jsx';
 
-export default function ChecklistForm({ onSave, onCancel, editing, forklifts }) {
+export default function ChecklistForm({ onSave, onCancel, editing, forklifts, initialForkliftId }) {
   const { lang, t } = useLang();
   const { user } = useAuth();
 
@@ -15,7 +16,7 @@ export default function ChecklistForm({ onSave, onCancel, editing, forklifts }) 
 
   const today = new Date();
   const [form, setForm] = useState({
-    forkliftId: editing?.forkliftId || '',
+    forkliftId: editing?.forkliftId || initialForkliftId || '',
     operatorName: editing?.operatorName || user?.name || '',
     inspectorName: editing?.inspectorName || user?.name || '',
     month: editing?.month ?? today.getMonth(),
@@ -23,6 +24,8 @@ export default function ChecklistForm({ onSave, onCancel, editing, forklifts }) 
     day: editing?.day ?? today.getDate(),
     items: editing?.items || {},
     observations: editing?.observations || '',
+    operatorSignature: editing?.operatorSignature || null,
+    inspectorSignature: editing?.inspectorSignature || null,
   });
 
   const [errors, setErrors] = useState({});
@@ -242,6 +245,22 @@ export default function ChecklistForm({ onSave, onCancel, editing, forklifts }) 
             value={form.observations}
             onChange={e => setForm(p => ({ ...p, observations: e.target.value }))}
             placeholder={t('observations')}
+          />
+        </div>
+      </div>
+
+      {/* Firmas */}
+      <div className="form-section signature-section">
+        <div className="signature-grid">
+          <SignaturePad
+            label={`✍️ ${t('signatureOperator')}`}
+            value={form.operatorSignature}
+            onChange={(v) => setForm(p => ({ ...p, operatorSignature: v }))}
+          />
+          <SignaturePad
+            label={`✍️ ${t('signatureInspector')}`}
+            value={form.inspectorSignature}
+            onChange={(v) => setForm(p => ({ ...p, inspectorSignature: v }))}
           />
         </div>
       </div>

@@ -1,12 +1,41 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useLang } from '../i18n/LanguageContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
+import { supabase } from '../lib/supabase.js';
 import { checklistItems, ratingOptions } from '../data/checklistItems.js';
+import CorrectionModal from './CorrectionModal.jsx';
 
 export default function SavedChecklists({ checklists, onEdit, onDelete, onExport, onExportPdf, onNew }) {
   const { lang, t } = useLang();
+  const { user } = useAuth();
   const [search, setSearch] = useState('');
   const [filterMonth, setFilterMonth] = useState(-1);
   const [expandedId, setExpandedId] = useState(null);
+  const [corrections, setCorrections] = useState({});
+  const [correctionItem, setCorrectionItem] = useState(null);
+  const [correctionsReload, setCorrectionsReload] = useState(0);
+
+  const canManage = user?.role === 'admin' || user?.role === 'supervisor';
+
+  // Al expandir un checklist se cargan las correcciones de sus puntos INS.
+  useEffect(() => {
+    if (!expandedId) { setCorrections({}); return; }
+    let active = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('checklist_corrections')
+          .select('item_id, corrected_by, corrected_at, correction_notes, verified_by, verified_at')
+          .eq('checklist_id', expandedId);
+        if (active && !error) {
+          const map = {};
+          (data || []).forEach(r => { map[r.item_id] = r; });
+          setCorrections(map);
+        }
+      } catch { /* sin conexión: se muestran chips neutros */ }
+    })();
+    return () => { active = false; };
+  }, [expandedId, correctionsReload]);
 
   const filtered = useMemo(() => {
     return checklists
@@ -120,6 +149,7 @@ export default function SavedChecklists({ checklists, onEdit, onDelete, onExport
                     {checklistItems.map(item => {
                       const rating = c.items?.[item.id];
                       const opt = ratingOptions.find(o => o.value === rating);
+                      const corr = corrections[item.id];
                       return (
                         <div key={item.id} className="expanded-item">
                           <span className="ei-num">{item.id}</span>
@@ -127,6 +157,22 @@ export default function SavedChecklists({ checklists, onEdit, onDelete, onExport
                           <span className={`ei-rating ${rating ? `rating-${opt?.color}` : 'pending'}`}>
                             {opt ? ratingLabel(opt) : t('pending')}
                           </span>
+                          {rating === 'INS' && (
+                            <span className="ei-correction">
+                              {corr && corr.verified_by ? (
+                                <span className="correction-chip verified">✅ {t('correctionVerified')}</span>
+                              ) : corr ? (
+                                <span className="correction-chip corrected">🔧 {t('correctionDone')}</span>
+                              ) : (
+                                <span className="correction-chip pending">⚠️ {t('correctionPending')}</span>
+                              )}
+                              <button
+                                className="icon-btn correction-btn"
+                                title={t('correctionManage')}
+                                onClick={() => setCorrectionItem({ checklistId: c.id, item })}
+                              >🔧</button>
+                            </span>
+                          )}
                         </div>
                       );
                     })}
@@ -142,6 +188,16 @@ export default function SavedChecklists({ checklists, onEdit, onDelete, onExport
         <div className="empty-state">
           <p>{t('noChecklists')}</p>
         </div>
+      )}
+
+      {correctionItem && (
+        <CorrectionModal
+          checklistId={correctionItem.checklistId}
+          item={correctionItem.item}
+          canManage={canManage}
+          onClose={() => setCorrectionItem(null)}
+          onSaved={() => setCorrectionsReload(n => n + 1)}
+        />
       )}
     </div>
   );

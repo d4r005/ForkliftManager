@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LanguageProvider, useLang } from './i18n/LanguageContext.jsx';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { useStore } from './hooks/useStore.js';
@@ -10,6 +10,8 @@ import ForkliftManager from './components/ForkliftManager.jsx';
 import UserManager from './components/UserManager.jsx';
 import EmployeeRecords from './components/EmployeeRecords.jsx';
 import Login from './components/Login.jsx';
+import Reports from './components/Reports.jsx';
+import AuditLog from './components/AuditLog.jsx';
 import { exportChecklistToExcel } from './utils/exportExcel.js';
 import { exportChecklistToPdf } from './utils/exportPdf.js';
 import Navigation from './components/Navigation.jsx';
@@ -21,6 +23,20 @@ function AppContent() {
   const store = useStore(user);
   const [view, setView] = useState('dashboard');
   const [editing, setEditing] = useState(null);
+  const [qrForklift, setQrForklift] = useState(null);
+
+  // Deep-link de QR: #/checklist/<idCode> -> nueva revisión preseleccionada.
+  useEffect(() => {
+    const m = window.location.hash.match(/^#\/checklist\/(.+)$/);
+    if (m && user) {
+      const idCode = decodeURIComponent(m[1]);
+      history.replaceState(null, '', window.location.pathname);
+      setEditing(null);
+      setQrForklift(idCode);
+      setView('form');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const handleSave = async (checklist) => {
     try {
@@ -30,6 +46,7 @@ function AppContent() {
       } else {
         await store.addChecklist(checklist);
       }
+      setQrForklift(null);
       setView('list');
     } catch (err) {
       console.error('Save error:', err);
@@ -103,12 +120,21 @@ function AppContent() {
         setView={(v) => { setView(v); if (v !== 'form') setEditing(null); }}
         checklistCount={store.data.checklists.length}
         isAdmin={canManageContent}
+        isAdminUser={isAdmin}
       />
 
       <main className="app-main">
         {store.error && (
           <div className="alert alert-error" style={{ marginBottom: '16px' }}>
             ⚠️ {store.error}
+          </div>
+        )}
+        {store.offline?.pending > 0 && (
+          <div className="alert alert-warning" style={{ marginBottom: '16px' }}>
+            📴 {t('offlineBanner').replace('{n}', store.offline.pending)}{' '}
+            <button className="btn btn-sm btn-primary" onClick={store.offline.syncNow}>
+              🔄 {t('offlineSyncNow')}
+            </button>
           </div>
         )}
         {view === 'dashboard' && (
@@ -122,9 +148,10 @@ function AppContent() {
         {view === 'form' && (
           <ChecklistForm
             onSave={handleSave}
-            onCancel={() => { setEditing(null); setView('list'); }}
+            onCancel={() => { setEditing(null); setQrForklift(null); setView('list'); }}
             editing={editing}
             forklifts={store.data.forklifts}
+            initialForkliftId={qrForklift}
           />
         )}
 
@@ -146,6 +173,14 @@ function AppContent() {
             onUpdate={store.updateForklift}
             onDelete={store.deleteForklift}
           />
+        )}
+
+        {view === 'reports' && canManageContent && (
+          <Reports checklists={store.data.checklists} forklifts={store.data.forklifts} />
+        )}
+
+        {view === 'auditoria' && isAdmin && (
+          <AuditLog />
         )}
 
         {view === 'users' && canManageContent && (

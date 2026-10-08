@@ -25,6 +25,8 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
   const [ocrProcessing, setOcrProcessing] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [extractedData, setExtractedData] = useState(null);
+  const [qrForklift, setQrForklift] = useState(null);   // equipo del modal QR
+  const [qrImage, setQrImage] = useState(null);
   const photoInputRef = useRef(null);
   const plateInputRef = useRef(null);
   const fileTarget = useRef(null);
@@ -560,6 +562,53 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
     );
   }
 
+  // === QR por equipo ===
+  const openQr = async (f) => {
+    setQrForklift(f);
+    setQrImage(null);
+    try {
+      setQrImage(await generateForkliftQR(f.idCode, 320));
+    } catch {
+      setAlert({ type: 'error', msg: 'QR: ' + t('qrError') });
+    }
+  };
+
+  const printOneQr = () => {
+    if (!qrImage || !qrForklift) return;
+    const ok = printHTML(`<!DOCTYPE html><html><head><title>QR ${qrForklift.idCode}</title></head>
+      <body style="font-family:sans-serif;text-align:center;padding:24px">
+        <h2 style="margin:0 0 4px">${qrForklift.idCode}</h2>
+        <p style="margin:0 0 12px;color:#555">${qrForklift.name || ''}</p>
+        <img src="${qrImage}" width="300" height="300"/>
+        <p style="color:#666;font-size:13px">Escanear para iniciar la revisión</p>
+      </body></html>`);
+    if (!ok) downloadDataURL(qrImage, `QR_${qrForklift.idCode}.png`);
+  };
+
+  const printAllQrs = async () => {
+    if (!forklifts.length) return;
+    try {
+      const items = await Promise.all(forklifts.map(async f => {
+        const img = await generateForkliftQR(f.idCode, 220);
+        return `<div style="border:1px solid #ddd;border-radius:8px;padding:10px;text-align:center;page-break-inside:avoid">
+          <div style="font-weight:bold;font-size:15px">${f.idCode}</div>
+          <div style="color:#555;font-size:12px;margin-bottom:6px">${f.name || ''}</div>
+          <img src="${img}" width="180" height="180"/>
+        </div>`;
+      }));
+      const ok = printHTML(`<!DOCTYPE html><html><head><title>QR Montacargas</title></head>
+        <body style="font-family:sans-serif">
+          <h2 style="text-align:center">QR — Montacargas</h2>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">${items.join('')}</div>
+        </body></html>`);
+      if (!ok) {
+        for (const f of forklifts) downloadDataURL(await generateForkliftQR(f.idCode), `QR_${f.idCode}.png`);
+      }
+    } catch {
+      setAlert({ type: 'error', msg: 'QR: ' + t('qrError') });
+    }
+  };
+
   // === LIST VIEW ===
   return (
     <div className="forklift-manager">
@@ -567,7 +616,12 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
 
       <div className="section-header">
         <h2>🚜 {t('forklifts')}</h2>
-        {isAdmin && <button className="btn btn-primary" onClick={handleAddNew}>➕ {t('fkAddNew')}</button>}
+        <div className="section-header-actions">
+          {forklifts.length > 0 && (
+            <button className="btn btn-secondary" onClick={printAllQrs}>🔳 {t('qrPrintAll')}</button>
+          )}
+          {isAdmin && <button className="btn btn-primary" onClick={handleAddNew}>➕ {t('fkAddNew')}</button>}
+        </div>
       </div>
 
       {forklifts.length === 0 ? (
@@ -590,14 +644,40 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete }
                 {f.powerType && <div className="fk-card-power">⛽ {f.powerType}</div>}
                 {f.serialNumber && <div className="fk-card-serial">🔢 {f.serialNumber}</div>}
               </div>
-              {isAdmin && (
-                <div className="fk-card-actions">
-                  <button className="icon-btn" onClick={(e) => { e.stopPropagation(); handleEdit(f); }} title={t('fkEdit')}>✏️</button>
-                  <button className="icon-btn danger" onClick={(e) => { e.stopPropagation(); if (confirm(t('confirmDeleteForklift'))) onDelete(f.id); }} title={t('deleteForklift')}>🗑️</button>
-                </div>
-              )}
+              <div className="fk-card-actions">
+                <button className="icon-btn" onClick={(e) => { e.stopPropagation(); openQr(f); }} title={t('qrTitle')}>🔳</button>
+                {isAdmin && <button className="icon-btn" onClick={(e) => { e.stopPropagation(); handleEdit(f); }} title={t('fkEdit')}>✏️</button>}
+                {isAdmin && <button className="icon-btn danger" onClick={(e) => { e.stopPropagation(); if (confirm(t('confirmDeleteForklift'))) onDelete(f.id); }} title={t('deleteForklift')}>🗑️</button>}
+              </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Modal QR */}
+      {qrForklift && (
+        <div className="correction-overlay" onClick={() => setQrForklift(null)}>
+          <div className="correction-modal" style={{ textAlign: 'center', minWidth: '320px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="correction-header">
+              <h3>🔳 {t('qrTitle')} — {qrForklift.idCode}</h3>
+              <button className="icon-btn" onClick={() => setQrForklift(null)}>✕</button>
+            </div>
+            {qrImage ? (
+              <img src={qrImage} alt={qrForklift.idCode} width="240" height="240" style={{ margin: '12px auto' }} />
+            ) : (
+              <p style={{ padding: '40px' }}>…</p>
+            )}
+            {qrForklift.name && <p style={{ margin: '0 0 12px', fontWeight: '600' }}>{qrForklift.name}</p>}
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '16px' }}>
+              <button className="btn btn-secondary" onClick={() => downloadDataURL(qrImage, `QR_${qrForklift.idCode}.png`)} disabled={!qrImage}>
+                💾 {t('qrDownload')}
+              </button>
+              <button className="btn btn-primary" onClick={printOneQr} disabled={!qrImage}>
+                🖨️ {t('qrPrint')}
+              </button>
+            </div>
+            <p className="qr-hint">{t('qrHint')}</p>
+          </div>
         </div>
       )}
     </div>

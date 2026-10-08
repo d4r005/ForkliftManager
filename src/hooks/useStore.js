@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase.js';
+import { enqueue, replay, count, removeById, isNetworkError, getQueue } from '../services/offlineQueue.js';
 
 export function useStore(user) {
   const [checklists, setChecklists] = useState([]);
   const [forklifts, setForklifts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [offlinePending, setOfflinePending] = useState(0);
+  const [offlineInfo, setOfflineInfo] = useState(null); // msg cuando se encola algo
 
   useEffect(() => {
     if (!user) {
@@ -41,8 +44,37 @@ export function useStore(user) {
       if (checklistsRes.error) throw checklistsRes.error;
       if (forkliftsRes.error) throw forkliftsRes.error;
 
-      setChecklists((checklistsRes.data || []).map(mapChecklistFromDB));
+      let mapped = (checklistsRes.data || []).map(mapChecklistFromDB);
+
+      // Registros creados offline pendientes de sincronizar: se muestran
+      // también (id temporal local-xxx, marcados con isLocal).
+      const queue = getQueue();
+      const pendingAdds = queue
+        .filter(op => op.type === 'addChecklist')
+        .map(op => {
+          const p = op.payload || {};
+          return {
+            id: `local-${op.id}`,
+            localId: op.id,
+            forkliftId: p.forklift_id,
+            operatorName: p.operator_name,
+            inspectorName: p.inspector_name,
+            month: p.month,
+            year: p.year,
+            day: p.day,
+            items: p.items || {},
+            observations: p.observations || '',
+            operatorSignature: p.operator_signature || null,
+            inspectorSignature: p.inspector_signature || null,
+            createdAt: new Date(op.createdAt || Date.now()).toISOString(),
+            isLocal: true,
+          };
+        });
+      mapped = [...pendingAdds, ...mapped];
+
+      setChecklists(mapped);
       setForklifts((forkliftsRes.data || []).map(mapForkliftFromDB));
+      setOfflinePending(pendingAdds.length);
     } catch (err) {
       console.error('Error loading data:', err);
       setError(err.message);
@@ -51,22 +83,50 @@ export function useStore(user) {
     }
   };
 
+  // Sincroniza la cola offline contra Supabase y recarga.
+  const syncOffline = useCallback(async () => {
+    if (!user || count() === 0) return { synced: 0 };
+    setLoading(true);
+    try {
+      const result = await replay(supabase, user);
+      if (result.failed?.length) {
+        setError(`Sync: ${result.failed.length} operación(es) con error (revisar permisos)`);
+      }
+      await loadData();
+      return result;
+    } finally {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  // Al recuperar conexión: sincroniza lo pendiente.
+  useEffect(() => {
+    const onOnline = () => { if (count() > 0) syncOffline(); };
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   const addChecklist = useCallback(async (checklist) => {
     if (!user) throw new Error('no_session');
+    const insertPayload = {
+      forklift_id: checklist.forkliftId,
+      operator_name: checklist.operatorName,
+      inspector_name: checklist.inspectorName,
+      month: checklist.month,
+      year: checklist.year,
+      day: checklist.day,
+      items: checklist.items,
+      observations: checklist.observations || '',
+      employee_number: user.employeeNumber,
+      ...(checklist.operatorSignature ? { operator_signature: checklist.operatorSignature } : {}),
+      ...(checklist.inspectorSignature ? { inspector_signature: checklist.inspectorSignature } : {}),
+    };
     try {
       const { data, error: dbError } = await supabase
         .from('checklists')
-        .insert({
-          forklift_id: checklist.forkliftId,
-          operator_name: checklist.operatorName,
-          inspector_name: checklist.inspectorName,
-          month: checklist.month,
-          year: checklist.year,
-          day: checklist.day,
-          items: checklist.items,
-          observations: checklist.observations || '',
-          employee_number: user.employeeNumber,
-        })
+        .insert(insertPayload)
         .select()
         .single();
 
@@ -76,10 +136,40 @@ export function useStore(user) {
       return mapped;
     } catch (err) {
       console.error('Error adding checklist:', err);
+      if (isNetworkError(err)) return enqueueLocal('addChecklist', { payload: insertPayload }, checklist);
       setError(err.message);
       throw err;
     }
   }, [user]);
+
+  // Guarda la operación en la cola offline y refleja el cambio en el
+  // estado local para que la UI lo muestre como si estuviera guardado.
+  const enqueueLocal = (type, op, checklist) => {
+    const opId = enqueue(op);
+    setOfflinePending(count());
+    setOfflineInfo('offlineQueued');
+    if (type === 'addChecklist' && checklist) {
+      const localRecord = {
+        id: `local-${opId}`,
+        localId: opId,
+        forkliftId: checklist.forkliftId,
+        operatorName: checklist.operatorName,
+        inspectorName: checklist.inspectorName,
+        month: checklist.month,
+        year: checklist.year,
+        day: checklist.day,
+        items: checklist.items || {},
+        observations: checklist.observations || '',
+        operatorSignature: checklist.operatorSignature || null,
+        inspectorSignature: checklist.inspectorSignature || null,
+        createdAt: new Date().toISOString(),
+        isLocal: true,
+      };
+      setChecklists(prev => [localRecord, ...prev]);
+      return localRecord;
+    }
+    return null;
+  };
 
   const updateChecklist = useCallback(async (id, updates) => {
     try {
@@ -92,6 +182,8 @@ export function useStore(user) {
       if (updates.day !== undefined) dbUpdates.day = updates.day;
       if (updates.items !== undefined) dbUpdates.items = updates.items;
       if (updates.observations !== undefined) dbUpdates.observations = updates.observations;
+      if (updates.operatorSignature !== undefined) dbUpdates.operator_signature = updates.operatorSignature;
+      if (updates.inspectorSignature !== undefined) dbUpdates.inspector_signature = updates.inspectorSignature;
 
       const isManager = user?.role === 'admin' || user?.role === 'supervisor';
 
@@ -108,6 +200,13 @@ export function useStore(user) {
       return mapped;
     } catch (err) {
       console.error('Error updating checklist:', err);
+      if (isNetworkError(err)) {
+        enqueue('updateChecklist', { id, updates });
+        setOfflinePending(count());
+        setOfflineInfo('offlineQueued');
+        setChecklists(prev => prev.map(c => (c.id === id ? { ...c, ...updates, isLocal: true } : c)));
+        return { ...updates };
+      }
       setError(err.message);
       throw err;
     }
@@ -127,6 +226,18 @@ export function useStore(user) {
       setChecklists(prev => prev.filter(c => c.id !== id));
     } catch (err) {
       console.error('Error deleting checklist:', err);
+      if (isNetworkError(err)) {
+        // Si era un registro local aún sin sincronizar, solo se quita de la cola.
+        if (String(id).startsWith('local-')) {
+          removeById(String(id).replace('local-', ''));
+        } else {
+          enqueue('deleteChecklist', { id });
+          setOfflinePending(count());
+          setOfflineInfo('offlineQueued');
+        }
+        setChecklists(prev => prev.filter(c => c.id !== id));
+        return;
+      }
       setError(err.message);
       throw err;
     }
@@ -238,6 +349,7 @@ export function useStore(user) {
     addForklift,
     updateForklift,
     deleteForklift,
+    offline: { pending: offlinePending, info: offlineInfo, syncNow: syncOffline },
   };
 }
 
@@ -252,6 +364,8 @@ function mapChecklistFromDB(row) {
     day: row.day,
     items: row.items || {},
     observations: row.observations || '',
+    operatorSignature: row.operator_signature || null,
+    inspectorSignature: row.inspector_signature || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
