@@ -3,6 +3,7 @@ import { useLang } from '../i18n/LanguageContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
 import { extractPlateDataWithAI, extractTextFromImage, parseForkliftPlateData } from '../utils/ocrExtract.js';
+import { generateForkliftQR, downloadDataURL, printHTML } from '../utils/qr.js';
 
 export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete, maintenances = [], onAddMaintenance }) {
   const { t } = useLang();
@@ -672,7 +673,8 @@ export default function ForkliftManager({ forklifts, onAdd, onUpdate, onDelete, 
     setQrImage(null);
     try {
       setQrImage(await generateForkliftQR(f.idCode, 320));
-    } catch {
+    } catch (err) {
+      console.error('Error generando QR:', err);
       setAlert({ type: 'error', msg: 'QR: ' + t('qrError') });
     }
   };
