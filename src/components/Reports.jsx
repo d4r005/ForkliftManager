@@ -1,12 +1,14 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useLang } from '../i18n/LanguageContext.jsx';
 import { checklistItems } from '../data/checklistItems.js';
+import { exportMonthlyReport } from '../utils/exportMonthlyReport.js';
 
 // Reportes y tendencias (admin/supervisor): KPIs, insatisfactorios por
 // montacargas, puntos críticos y tendencia mensual. Gráficas sin
 // dependencias externas (barras CSS/SVG puras).
 export default function Reports({ checklists = [], forklifts = [] }) {
   const { t, lang } = useLang();
+  const [exporting, setExporting] = useState(false);
 
   const stats = useMemo(() => {
     const total = checklists.length;
@@ -52,6 +54,35 @@ export default function Reports({ checklists = [], forklifts = [] }) {
     return { total, insCount, satCount, naCount, rated, topForklifts, topItems, months };
   }, [checklists]);
 
+  // Meses con datos, para el selector del reporte descargable.
+  const monthOptions = useMemo(() => {
+    const set = new Map();
+    checklists.forEach(c => {
+      if (c.month !== undefined && c.month !== null && c.year) {
+        set.set(`${c.year}-${c.month}`, { year: c.year, month: c.month });
+      }
+    });
+    return [...set.values()].sort((a, b) => b.year - a.year || b.month - a.month);
+  }, [checklists]);
+
+  const [reportSel, setReportSel] = useState(() =>
+    monthOptions.length ? `${monthOptions[0].year}-${monthOptions[0].month}` : ''
+  );
+
+  const handleExportReport = async () => {
+    if (!reportSel) return;
+    const [y, m] = reportSel.split('-').map(Number);
+    setExporting(true);
+    try {
+      await exportMonthlyReport(m, y, checklists);
+    } catch (err) {
+      console.error('Error exportando reporte mensual:', err);
+      alert(err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (checklists.length === 0) {
     return (
       <div className="empty-state">
@@ -70,6 +101,28 @@ export default function Reports({ checklists = [], forklifts = [] }) {
     <div className="reports-view">
       <div className="section-header">
         <h2>📈 {t('reportsTitle')}</h2>
+        <div className="section-header-actions">
+          <select
+            className="filter-select"
+            value={reportSel}
+            onChange={e => setReportSel(e.target.value)}
+            disabled={exporting}
+          >
+            {monthOptions.map(o => (
+              <option key={`${o.year}-${o.month}`} value={`${o.year}-${o.month}`}>
+                {t('months')[o.month]} {o.year}
+              </option>
+            ))}
+          </select>
+          <button
+            className="btn btn-primary"
+            onClick={handleExportReport}
+            disabled={exporting || !reportSel}
+            title={t('reportsDownloadHint')}
+          >
+            {exporting ? '⏳ …' : `⬇️ ${t('reportsDownload')}`}
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
