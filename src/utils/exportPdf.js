@@ -39,7 +39,7 @@ const isCJK = (ch) => {
   return (c >= 0x2e80 && c <= 0x9fff) || (c >= 0xff00 && c <= 0xffef) || (c >= 0x3000 && c <= 0x303f);
 };
 
-// Acepta un solo checklist (compatibilidad hacia atrás, p.ej. PdfDesigner)
+// Acepta un solo checklist (compatibilidad hacia atrás)
 // o un arreglo de checklists del MISMO montacargas/mes/año — en cuyo caso
 // dibuja TODOS los días que tengan datos en la cuadrícula de 31 columnas,
 // no solo uno. Así el PDF exportado refleja toda la información mensual
