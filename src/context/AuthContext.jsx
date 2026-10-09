@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase.js';
+import { supabase, setAuditUser } from '../lib/supabase.js';
 
 const AuthContext = createContext({});
 
@@ -18,6 +18,7 @@ export function AuthProvider({ children }) {
       if (saved) {
         restored = JSON.parse(saved);
         setUser(restored);
+        setAuditUser(restored.employeeNumber);
       }
     } catch (e) {
       console.error('Error restoring session:', e);
@@ -74,6 +75,7 @@ export function AuthProvider({ children }) {
         photoPath: userData.photoPath || null,
       };
       setUser(session);
+      setAuditUser(session.employeeNumber);
       localStorage.setItem(SESSION_KEY, JSON.stringify(session));
       return true;
     } catch (err) {
@@ -85,6 +87,7 @@ export function AuthProvider({ children }) {
 
   const signOut = () => {
     setUser(null);
+    setAuditUser(null);
     localStorage.removeItem(SESSION_KEY);
   };
 

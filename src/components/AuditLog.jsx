@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLang } from '../i18n/LanguageContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
 
 // Bitácora de auditoría (solo admin): historial de INSERT/UPDATE/DELETE
@@ -7,12 +8,34 @@ import { supabase } from '../lib/supabase.js';
 // supabase/audit_log_migration.sql.
 export default function AuditLog() {
   const { t } = useLang();
+  const { user } = useAuth();
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filterTable, setFilterTable] = useState('all');
   const [filterAction, setFilterAction] = useState('all');
   const [expandedId, setExpandedId] = useState(null);
+  const [userNames, setUserNames] = useState({});
+
+  // changed_by guarda el número de empleado (o 'sistema'); lo resolvemos
+  // a nombre para que la bitácora se lea bien.
+  useEffect(() => {
+    if (!user?.employeeNumber) return;
+    (async () => {
+      try {
+        const { data } = await supabase.rpc('get_users', { p_admin_employee_number: user.employeeNumber });
+        const map = {};
+        (data?.users || []).forEach(u => { map[String(u.employeeNumber)] = u.name; });
+        setUserNames(map);
+      } catch (e) { /* map vacío: se muestran los números tal cual */ }
+    })();
+  }, [user?.employeeNumber]);
+
+  const actorLabel = (v) => {
+    if (!v) return '—';
+    const name = userNames[String(v)];
+    return name ? `${name} (${v})` : v;
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -90,7 +113,7 @@ export default function AuditLog() {
                 <span className="audit-record" title={e.record_id}>
                   #{e.record_id ? String(e.record_id).slice(0, 8) : '—'}
                 </span>
-                <span className="audit-user">{e.changed_by || '—'}</span>
+                <span className="audit-user">{actorLabel(e.changed_by)}</span>
                 <span className="audit-date">{fmtDateTime(e.changed_at)}</span>
               </div>
               {expandedId === e.id && e.details && (
